@@ -1,0 +1,453 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 10px;
+    background-color: #f0f0f0;
+    width: 300px; /* 减小宽度 */
+}
+
+/* 弹出窗口样式 */
+body:not(.options-page) {
+    width: 300px; /* 弹出窗口宽度 */
+}
+
+/* 设置页面样式 */
+body.options-page {
+    width: auto; /* 自动宽度 */
+    max-width: 1000px; /* 增加最大宽度 */
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 设置页面标题样式 */
+.options-page h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #333;
+}
+
+.button-group {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.round-button {
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    margin: 2px;
+    cursor: pointer;
+    border-radius: 50px;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+#saveButton, #saveSettings {
+    background-color: #FFC107; /* 黄色 */
+}
+
+#restoreButton {
+    background-color: #4CAF50; /* 绿色，与恢复按钮一致 */
+}
+
+#exportButton {
+    background-color: #2196F3; /* 蓝色，与重命名按钮一致 */
+}
+
+#settingsButton {
+    background-color: #F44336; /* 红色，与删除按钮一致 */
+}
+
+#saveSettings {
+    background-color: #FFC107; /* 黄色 */
+}
+
+.round-button:hover {
+    filter: brightness(110%);
+    transform: scale(1.05);
+}
+
+.round-button:active {
+    transform: scale(0.95);
+}
+
+.info-text {
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #666;
+    text-align: center;
+}
+
+.snapshot-list {
+    margin-top: 10px;
+}
+
+/* 插件弹窗中的快照列表样式 */
+body:not(.options-page) .snapshot-item {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+body:not(.options-page) .snapshot-name {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 4px;
+}
+
+body:not(.options-page) .snapshot-date {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+body:not(.options-page) .snapshot-actions {
+    display: flex;
+    justify-content: space-between;
+}
+
+body:not(.options-page) .snapshot-actions button {
+    flex: 1;
+    margin: 0 4px;
+    padding: 6px 0;
+    font-size: 12px;
+    border: none;
+    color: white;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+body:not(.options-page) .snapshot-actions button:first-child {
+    margin-left: 0;
+}
+
+body:not(.options-page) .snapshot-actions button:last-child {
+    margin-right: 0;
+}
+
+body:not(.options-page) .snapshot-actions .restore-btn {
+    background-color: #4CAF50; /* 绿色 */
+}
+
+body:not(.options-page) .snapshot-actions .rename-btn {
+    background-color: #2196F3; /* 蓝色 */
+}
+
+body:not(.options-page) .snapshot-actions .delete-btn {
+    background-color: #F44336; /* 红色 */
+}
+
+body:not(.options-page) .snapshot-actions button:hover {
+    filter: brightness(110%);
+    transform: scale(1.05);
+}
+
+body:not(.options-page) .snapshot-actions button:active {
+    transform: scale(0.95);
+}
+
+/* 设置页面的快照列表样式保持不变 */
+.options-page .snapshot-item {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.options-page .snapshot-header {
+    margin-bottom: 8px;
+}
+
+.options-page .snapshot-name {
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.options-page .snapshot-subheader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.options-page .snapshot-date {
+    font-size: 14px;
+    color: #666;
+}
+
+.options-page .snapshot-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.options-page .snapshot-actions button {
+    padding: 6px 12px; /* 稍微增加了内边距 */
+    font-size: 12px;
+    border: none;
+    color: white;
+    border-radius: 50px; /* 增加圆角半径 */
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+.options-page .snapshot-actions .restore-btn {
+    background-color: #4CAF50;
+}
+
+.options-page .snapshot-actions .rename-btn {
+    background-color: #2196F3;
+}
+
+.options-page .snapshot-actions .delete-btn {
+    background-color: #F44336;
+}
+
+.options-page .snapshot-actions button:hover {
+    filter: brightness(110%);
+    transform: scale(1.05);
+}
+
+.options-page .snapshot-actions button:active {
+    transform: scale(0.95);
+}
+
+.snapshot-details {
+    border-top: 1px solid #ddd;
+    padding-top: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.tab-item {
+    margin-bottom: 8px;
+}
+
+.tab-title {
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.tab-url {
+    font-size: 12px;
+    color: #666;
+    word-break: break-all;
+}
+
+.custom-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.dialog-content {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 80%;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dialog-buttons {
+    margin-top: 20px;
+}
+
+.dialog-buttons button {
+    margin: 0 10px;
+    padding: 10px 20px;
+    border: none;
+    color: white;
+    border-radius: 50px; /* 增加圆角半径 */
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+    font-size: 14px;
+}
+
+.dialog-buttons button:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+}
+
+.dialog-buttons button:active {
+    transform: scale(0.95);
+}
+
+.setting-group {
+    margin-bottom: 15px;
+}
+
+.setting-group label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.setting-group input {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.storage-usage {
+    margin-top: 20px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.progress {
+    height: 100%;
+    background-color: #4CAF50;
+    transition: width 0.3s ease-in-out;
+}
+
+@media (max-width: 600px) {
+    body.options-page {
+        padding: 10px;
+    }
+}
+
+/* 美化输入框 */
+input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 25px;
+    box-sizing: border-box;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+input[type="text"]:focus, input[type="number"]:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+/* 自定义弹窗样式 */
+.custom-dialog .dialog-content {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 80%;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.custom-dialog input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 25px;
+    font-size: 14px;
+}
+
+.custom-dialog .dialog-buttons button {
+    margin: 0 10px;
+    padding: 10px 20px;
+    border: none;
+    color: white;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+    font-size: 14px;
+}
+
+.custom-dialog .dialog-buttons button:first-child {
+    background-color: #4CAF50; /* 确认按钮为绿色 */
+}
+
+.custom-dialog .dialog-buttons button:last-child {
+    background-color: #F44336; /* 取消按钮为红色 */
+}
+
+/* 设置页面的保存设置按钮样式 */
+.options-page #saveSettings {
+    display: block;
+    width: 250px; /* 增加按钮宽度 */
+    margin: 30px auto;
+    padding: 12px 24px;
+    font-size: 16px; /* 增加字体大小 */
+}
+
+.window-item {
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px;
+}
+
+.window-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+/* 设置页面的输入框和按钮样式 */
+.options-page .setting-group {
+    max-width: 500px; /* 增加最大宽度 */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.options-page #saveSettings {
+    display: block;
+    width: 200px; /* 固定宽度 */
+    margin: 20px auto;
+    padding: 10px 20px;
+}
+
+.options-page .storage-usage {
+    max-width: 700px; /* 增加最大宽度 */
+    margin: 20px auto;
+}
+
+/* 设置页面的快照列表样式 */
+.options-page .snapshot-list {
+    max-width: 900px; /* 增加最大宽度 */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.options-page .progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.options-page .progress {
+    height: 100%;
+    background-color: #4CAF50;
+    transition: width 0.3s ease-in-out;
+}
+
+.options-page #snapshotCounts {
+    margin-top: 20px;
+    text-align: center;
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabVault 设置</title>
+    <link rel="stylesheet" href="shared.css">
+</head>
+<body class="options-page">
+    <h1>TabVault 设置</h1>
+    <div class="setting-group">
+        <label for="autoSaveInterval">自动保存间隔（分钟）：</label>
+        <input type="number" id="autoSaveInterval" min="1" max="1440">
+    </div>
+    <div class="setting-group">
+        <label for="maxAutoSnapshots">最大自动快照数量：</label>
+        <input type="number" id="maxAutoSnapshots" min="1" max="100">
+    </div>
+    <button id="saveSettings" class="round-button">保存设置</button>
+    <div class="storage-usage">
+        <div id="storageUsage" class="info-text"></div>
+    </div>
+    <div class="progress-bar">
+        <div id="storageProgress" class="progress"></div>
+    </div>
+    <div id="snapshotCounts" class="info-text"></div>
+    <div id="snapshotList" class="snapshot-list"></div>
+    <script src="common.js"></script>
+    <script src="options.js"></script>
+</body>
+</html>
