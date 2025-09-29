@@ -6,7 +6,7 @@ function createCustomDialog(message, onConfirm, showCancel = true, showInput = f
       <p>${message}</p>
       ${showInput ? '<input type="text" id="dialogInput">' : ''}
       <div class="dialog-buttons">
-        <button id="confirmBtn">确定</button>
+        <button id="confirmBtn">确认</button>
         ${showCancel ? '<button id="cancelBtn">取消</button>' : ''}
       </div>
     </div>
@@ -16,8 +16,13 @@ function createCustomDialog(message, onConfirm, showCancel = true, showInput = f
 
   const confirmAction = () => {
     const input = showInput ? document.getElementById('dialogInput').value : null;
-    onConfirm(input);
-    document.body.removeChild(dialog);
+    try {
+      onConfirm(input);
+    } finally {
+      if (dialog.parentNode) {
+        document.body.removeChild(dialog);
+      }
+    }
   };
 
   document.getElementById('confirmBtn').addEventListener('click', confirmAction);
@@ -34,7 +39,9 @@ function createCustomDialog(message, onConfirm, showCancel = true, showInput = f
 
   if (showCancel) {
     document.getElementById('cancelBtn').addEventListener('click', () => {
-      document.body.removeChild(dialog);
+      if (dialog.parentNode) {
+        document.body.removeChild(dialog);
+      }
     });
   }
 }
@@ -44,36 +51,74 @@ function formatDate(dateString) {
   return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
 }
 
-function updateStorageUsage() {
-  chrome.storage.local.getBytesInUse(null, (bytesInUse) => {
-    const totalStorageInBytes = 5 * 1024 * 1024; // 5MB in bytes
-    const usagePercentage = ((bytesInUse / totalStorageInBytes) * 100).toFixed(2);
-    document.getElementById('storageUsage').textContent = `存储空间使用：${usagePercentage}%`;
-    
-    // 如果存在进度条元素,则更新进度条
+async function updateStorageUsage() {
+  const usageElement = document.getElementById('storageUsage');
+  if (!usageElement || !window.TabVaultDB) {
+    return;
+  }
+  try {
+    const { bytes, totalBytes, ratio } = await TabVaultDB.estimateUsage();
+    const usedMB = bytes / (1024 * 1024);
+    const totalMB = totalBytes / (1024 * 1024);
+    usageElement.textContent = `存储空间约：${usedMB.toFixed(2)} MB / ${totalMB.toFixed(0)} MB`;
+
     const progressElement = document.getElementById('storageProgress');
     if (progressElement) {
-      progressElement.style.width = `${usagePercentage}%`;
+      const percentage = Math.min(100, (ratio * 100));
+      progressElement.style.width = `${percentage.toFixed(2)}%`;
     }
-  });
+  } catch (error) {
+    console.error('更新存储用量失败:', error);
+  }
 }
 
-function updateSnapshotCounts() {
-  chrome.storage.local.get(['snapshots'], (result) => {
-    const snapshots = result.snapshots || [];
-    const manualCount = snapshots.filter(s => s.name === "手动保存").length;
-    const autoCount = snapshots.filter(s => s.name === "自动保存").length;
-    document.getElementById('snapshotCounts').innerHTML = `手动快照：${manualCount}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;自动快照：${autoCount}`;
-  });
+async function updateSnapshotCounts() {
+  const counterElement = document.getElementById('snapshotCounts');
+  if (!counterElement || !window.TabVaultDB) {
+    return;
+  }
+  try {
+    const snapshots = await TabVaultDB.getSnapshots();
+    const manualCount = snapshots.filter((s) => TabVaultDB.isManualSnapshotName(s.name)).length;
+    const autoCount = snapshots.filter((s) => TabVaultDB.isAutoSnapshotName(s.name)).length;
+    counterElement.innerHTML = `手动快照：${manualCount}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;自动快照：${autoCount}`;
+  } catch (error) {
+    console.error('统计快照数量失败:', error);
+  }
 }
 
-function loadSnapshotList(isPopup = false) {
+async function loadSnapshotList(isPopup = false) {
   const snapshotList = document.getElementById('snapshotList');
-  chrome.storage.local.get(['snapshots'], (result) => {
-    const snapshots = result.snapshots || [];
-    let newContent = '';
-    snapshots.forEach(snapshot => {
-      newContent += `
+  if (!snapshotList || !window.TabVaultDB) {
+    return;
+  }
+  try {
+    const snapshots = await TabVaultDB.getSnapshots();
+    if (!Array.isArray(snapshots) || snapshots.length === 0) {
+      snapshotList.innerHTML = '<div class="empty-state">暂无快照</div>';
+      return;
+    }
+
+    const listHtml = snapshots.map((snapshot) => {
+      const windowDetails = !isPopup && Array.isArray(snapshot.windows)
+        ? snapshot.windows.map((window, windowIndex) => {
+            const tabs = Array.isArray(window.tabs) ? window.tabs : [];
+            const tabItems = tabs.map((tab) => `
+                  <div class="tab-item">
+                    <div class="tab-title">${tab.title}</div>
+                    <div class="tab-url">${tab.url}</div>
+                  </div>
+                `).join('');
+            return `
+              <div class="window-item">
+                <div class="window-header">窗口 ${windowIndex + 1}</div>
+                ${tabItems || '<div class="tab-item">无标签页信息</div>'}
+              </div>
+            `;
+          }).join('')
+        : '';
+
+      return `
         <div class="snapshot-item">
           <div class="snapshot-header">
             <span class="snapshot-name">${snapshot.name}</span>
@@ -86,38 +131,32 @@ function loadSnapshotList(isPopup = false) {
               <button class="delete-btn" data-id="${snapshot.id}">删除</button>
             </div>
           </div>
-          ${!isPopup ? `
-          <div class="snapshot-details">
-            ${snapshot.windows ? snapshot.windows.map((window, windowIndex) => `
-              <div class="window-item">
-                <div class="window-header">窗口 ${windowIndex + 1}</div>
-                ${window.tabs.map(tab => `
-                  <div class="tab-item">
-                    <div class="tab-title">${tab.title}</div>
-                    <div class="tab-url">${tab.url}</div>
-                  </div>
-                `).join('')}
-              </div>
-            `).join('') : '无标签页数据'}
-          </div>
-          ` : ''}
+          ${windowDetails ? `<div class="snapshot-details">${windowDetails}</div>` : ''}
         </div>
       `;
+    }).join('');
+
+    snapshotList.innerHTML = listHtml;
+
+    snapshotList.querySelectorAll('.restore-btn').forEach((btn) => {
+      btn.addEventListener('click', () => restoreSnapshot(Number(btn.dataset.id)));
     });
-    snapshotList.innerHTML = newContent;
-
-    // 添加事件监听器
-    snapshotList.querySelectorAll('.restore-btn').forEach(btn => 
-      btn.addEventListener('click', () => restoreSnapshot(parseInt(btn.dataset.id))));
-    snapshotList.querySelectorAll('.rename-btn').forEach(btn => 
-      btn.addEventListener('click', () => renameSnapshot(parseInt(btn.dataset.id))));
-    snapshotList.querySelectorAll('.delete-btn').forEach(btn => 
-      btn.addEventListener('click', () => deleteSnapshot(parseInt(btn.dataset.id))));
-  });
+    snapshotList.querySelectorAll('.rename-btn').forEach((btn) => {
+      btn.addEventListener('click', () => renameSnapshot(Number(btn.dataset.id)));
+    });
+    snapshotList.querySelectorAll('.delete-btn').forEach((btn) => {
+      btn.addEventListener('click', () => deleteSnapshot(Number(btn.dataset.id)));
+    });
+  } catch (error) {
+    console.error('加载快照列表失败:', error);
+  }
 }
 
-function updateAllInfo(isPopup = false) {
-  updateStorageUsage();
-  updateSnapshotCounts();
-  loadSnapshotList(isPopup);
+async function updateAllInfo(isPopup = false) {
+  await Promise.all([
+    updateStorageUsage(),
+    updateSnapshotCounts(),
+    loadSnapshotList(isPopup)
+  ]);
 }
+

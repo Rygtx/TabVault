@@ -1,3 +1,4 @@
+importScripts('db.js');
 // 添加一个辅助函数来生成带时间的日志
 function logWithTime(message) {
   const now = new Date();
@@ -13,6 +14,42 @@ let lastSavedState = null; // 存储上一次保存的状态
 let restoringTabsCount = 0; // 正在恢复的标签页计数
 let restoredTabsCount = 0; // 已恢复的标签页计数
 let tabsToDiscard = new Set(); // 改回使用Set来存储需要丢弃的标签页ID
+
+function getAllWindows(options) {
+  return new Promise((resolve, reject) => {
+    chrome.windows.getAll(options, (windows) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(windows);
+      }
+    });
+  });
+}
+
+function chromeStorageGet(keys) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, (items) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(items);
+      }
+    });
+  });
+}
+
+function chromeStorageRemove(keys) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.remove(keys, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
 
 // 添加 MD5 哈希函数
 function md5(string) {
@@ -210,38 +247,56 @@ function md5(string) {
 }
 
 // 添加一个新函数来加载上次保存的状态
-function loadLastSavedState() {
-  chrome.storage.local.get(['lastSavedState'], (result) => {
-    if (result.lastSavedState) {
-      lastSavedState = result.lastSavedState;
-      logWithTime("已加载上次保存的状态哈希: " + lastSavedState);
+async function loadLastSavedState() {
+  try {
+    const storedState = await TabVaultDB.getLastSavedState();
+    if (storedState) {
+      lastSavedState = storedState;
+      logWithTime("已加载上次保存状态哈希: " + lastSavedState);
     } else {
-      logWithTime("未找到上次保存的状态哈希");
+      logWithTime("未找到上次保存状态哈希");
     }
-  });
+  } catch (error) {
+    logWithTime("读取上次保存状态时出错: " + error.message);
+  }
 }
+
 
 // 修改 chrome.runtime.onInstalled 监听器
 chrome.runtime.onInstalled.addListener(() => {
-  logWithTime("扩展已安装或更新");
-  chrome.storage.local.get(['settings', 'lastSavedState'], (result) => {
-    if (result.settings) {
-      logWithTime("加载已保存的设置:" + JSON.stringify(result.settings));
-      updateSettings(result.settings);
-    } else {
-      logWithTime("未找到已保存的设置，使用默认值");
-      setupAutoSave();
+  (async () => {
+    logWithTime("扩展已安装或更新");
+    try {
+      const storedSettings = await TabVaultDB.getValue("settings", null);
+      if (storedSettings) {
+        const mergedSettings = { ...TabVaultDB.DEFAULT_SETTINGS, ...storedSettings };
+        logWithTime("加载已保存设置:" + JSON.stringify(mergedSettings));
+        await updateSettings(mergedSettings);
+      } else {
+        logWithTime("未找到已保存设置，使用默认值");
+        await updateSettings(TabVaultDB.DEFAULT_SETTINGS);
+      }
+    } catch (error) {
+      logWithTime("加载设置时发生错误: " + error.message);
     }
-    if (result.lastSavedState) {
-      lastSavedState = result.lastSavedState;
-      logWithTime("已加载上次保存的状态哈希: " + lastSavedState);
+
+    try {
+      const storedState = await TabVaultDB.getLastSavedState();
+      if (storedState) {
+        lastSavedState = storedState;
+        logWithTime("已加载上次保存状态哈希: " + lastSavedState);
+      }
+    } catch (error) {
+      logWithTime("加载上次保存状态时发生错误: " + error.message);
     }
-  });
+  })();
 });
 
+
 // 修改 checkAndSaveCurrentTabs 函数
-function checkAndSaveCurrentTabs() {
-  chrome.windows.getAll({populate: true}, (windows) => {
+async function checkAndSaveCurrentTabs() {
+  try {
+    const windows = await getAllWindows({ populate: true });
     const currentState = windows.map(window => ({
       id: window.id,
       tabs: window.tabs.map(tab => tab.url)
@@ -250,38 +305,36 @@ function checkAndSaveCurrentTabs() {
     const currentStateHash = md5(JSON.stringify(currentState));
 
     if (lastSavedState === null || currentStateHash !== lastSavedState) {
-      logWithTime("检测到标签页变化或首次保存,执行自动保存");
+      logWithTime("检测到标签页变化，将执行自动保存");
       if (lastSavedState !== null) {
         logWithTime("上次状态哈希: " + lastSavedState);
       }
       logWithTime("当前状态哈希: " + currentStateHash);
-      saveCurrentTabs(true);
-      lastSavedState = currentStateHash;
-      // 保存新的状态哈希到存储
-      chrome.storage.local.set({ lastSavedState: currentStateHash }, () => {
-        logWithTime("已保存新的状态哈希到存储");
-      });
+      await saveCurrentTabs(true);
     } else {
-      logWithTime("标签页无变化,跳过自动保存");
+      logWithTime("标签页无变化，跳过自动保存");
     }
-  });
+  } catch (error) {
+    logWithTime("检查并保存标签页时发生错误: " + error.message);
+  }
 }
 
+
 // 修改 saveCurrentTabs 函数
-function saveCurrentTabs(isAuto) {
-  logWithTime(`尝试保存当前标签页 (自动: ${isAuto})`);
-  chrome.windows.getAll({populate: true}, (windows) => {
-    // 检查是否有打开的标签页
+async function saveCurrentTabs(isAuto) {
+  logWithTime(`准备保存当前标签页 (自动: ${isAuto})`);
+  try {
+    const windows = await getAllWindows({ populate: true });
     const hasOpenTabs = windows.some(window => window.tabs && window.tabs.length > 0);
-    
+
     if (!hasOpenTabs) {
-      logWithTime("未发现打开的标签页，跳过快照");
+      logWithTime("未检测到打开的标签页，取消保存");
       return;
     }
 
     const snapshot = {
       id: Date.now(),
-      name: isAuto ? "自动保存" : "手动保存",
+      name: isAuto ? TabVaultDB.SNAPSHOT_NAME_AUTO : TabVaultDB.SNAPSHOT_NAME_MANUAL,
       date: new Date().toISOString(),
       windows: windows.map(window => ({
         id: window.id,
@@ -289,42 +342,39 @@ function saveCurrentTabs(isAuto) {
       }))
     };
 
-    chrome.storage.local.get(['snapshots', 'settings'], (result) => {
-      let snapshots = result.snapshots || [];
-      let currentMaxAutoSnapshots = result.settings?.maxAutoSnapshots || maxAutoSnapshots;
-      
-      snapshots.unshift(snapshot);
+    const settings = await TabVaultDB.getSettings();
+    let snapshots = await TabVaultDB.getSnapshots();
 
-      if (isAuto) {
-        const autoSnapshots = snapshots.filter(s => s.name === "自动保存");
-        if (autoSnapshots.length > currentMaxAutoSnapshots) {
-          logWithTime(`移除多余的自动快照。当前: ${autoSnapshots.length}, 最大: ${currentMaxAutoSnapshots}`);
-          snapshots = snapshots.filter(s => s.name !== "自动保存" || autoSnapshots.indexOf(s) < currentMaxAutoSnapshots);
-        }
+    snapshots.unshift(snapshot);
+
+    if (isAuto) {
+      const autoSnapshots = snapshots.filter((s) => TabVaultDB.isAutoSnapshotName(s.name));
+      const currentMaxAutoSnapshots = settings.maxAutoSnapshots || maxAutoSnapshots;
+      if (autoSnapshots.length > currentMaxAutoSnapshots) {
+        logWithTime(`移除超出的自动快照。当前: ${autoSnapshots.length}, 限制: ${currentMaxAutoSnapshots}`);
+        snapshots = snapshots.filter((s) => !TabVaultDB.isAutoSnapshotName(s.name) || autoSnapshots.indexOf(s) < currentMaxAutoSnapshots);
       }
+    }
 
-      chrome.storage.local.set({ snapshots: snapshots }, () => {
-        logWithTime("快照保存成功");
-        // 更新lastSavedState，但只使用URL
-        lastSavedState = md5(JSON.stringify(snapshot.windows.map(w => ({
-          id: w.id,
-          tabs: w.tabs.map(t => t.url)
-        }))));
-        // 保存新的状态哈希到存储
-        chrome.storage.local.set({ lastSavedState: lastSavedState }, () => {
-          logWithTime("已保存新的状态哈希到存储: " + lastSavedState);
-        });
-        logWithTime("更新 lastSavedState: " + lastSavedState);
-        // 发送消息通知扩展的相关页面更新
-        chrome.runtime.sendMessage({ action: "refreshSnapshots" })
-          .catch(error => {
-            // 忽略错误，因为可能没有接收者
-            logWithTime("发送刷新快照消息时出错: " + error.message);
-          });
+    await TabVaultDB.setSnapshots(snapshots);
+
+    const hashInput = snapshot.windows.map(w => ({
+      id: w.id,
+      tabs: w.tabs.map(t => t.url)
+    }));
+    lastSavedState = md5(JSON.stringify(hashInput));
+    await TabVaultDB.saveLastSavedState(lastSavedState);
+    logWithTime("保存 lastSavedState: " + lastSavedState);
+
+    chrome.runtime.sendMessage({ action: "refreshSnapshots" })
+      .catch(error => {
+        logWithTime("广播刷新快照消息时出错: " + error.message);
       });
-    });
-  });
+  } catch (error) {
+    logWithTime("保存标签页时发生错误: " + error.message);
+  }
 }
+
 
 function setupAutoSave() {
   logWithTime(`设置自动保存间隔: ${autoSaveInterval} 分钟`);
@@ -373,6 +423,63 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+async function restoreSnapshot(snapshotId) {
+  try {
+    const snapshot = await TabVaultDB.getSnapshotById(snapshotId);
+    if (!snapshot) {
+      logWithTime(`未找到快照: ${snapshotId}`);
+      return;
+    }
+
+    const windowList = Array.isArray(snapshot.windows) ? snapshot.windows : [];
+
+    isRestoringSnapshot = true;
+    restoringTabsCount = 0;
+    restoredTabsCount = 0;
+    tabsToDiscard.clear();
+
+    chrome.windows.getAll({}, (windows) => {
+      windows.forEach(window => chrome.windows.remove(window.id));
+    });
+
+    windowList.forEach((windowData) => {
+      const tabs = Array.isArray(windowData.tabs) ? windowData.tabs : [];
+      chrome.windows.create({}, (newWindow) => {
+        if (!newWindow || !newWindow.tabs || newWindow.tabs.length === 0) {
+          return;
+        }
+        if (tabs.length === 0) {
+          tabsToDiscard.add(newWindow.tabs[0].id);
+          restoringTabsCount++;
+          return;
+        }
+        tabs.forEach((tab, tabIndex) => {
+          if (tabIndex === 0) {
+            chrome.tabs.update(newWindow.tabs[0].id, { url: tab.url }, (updatedTab) => {
+              if (updatedTab) {
+                tabsToDiscard.add(updatedTab.id);
+                restoringTabsCount++;
+              }
+            });
+          } else {
+            chrome.tabs.create({ windowId: newWindow.id, url: tab.url }, (createdTab) => {
+              if (createdTab) {
+                tabsToDiscard.add(createdTab.id);
+                restoringTabsCount++;
+              }
+            });
+          }
+        });
+      });
+    });
+
+    const expectedTabs = windowList.reduce((sum, windowData) => sum + (Array.isArray(windowData.tabs) ? windowData.tabs.length : 0), 0);
+    logWithTime(`开始恢复快照，预计 ${expectedTabs} 个标签页`);
+  } catch (error) {
+    logWithTime("恢复快照时发生错误: " + error.message);
+  }
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   logWithTime("收到消息: " + JSON.stringify(request));
   switch (request.action) {
@@ -386,72 +493,90 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       updateSettings(request.settings);
       break;
     case "snapshotsUpdated":
-      // 广播消息给所有页面
       chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, {action: "refreshSnapshots"})
-            .catch(error => {
-              // 忽略错误，因为某些标签页可能没有加载内容脚本
+        tabs.forEach((tab) => {
+          chrome.tabs.sendMessage(tab.id, { action: "refreshSnapshots" })
+            .catch((error) => {
               logWithTime(`向标签页 ${tab.id} 发送消息时出错: ${error.message}`);
             });
         });
       });
       break;
   }
-  // 确保sendResponse被调用
-  sendResponse({status: "消息已收到"});
-  return true; // 保持消息通道开放
+  sendResponse({ status: "消息已接收" });
+  return true;
 });
-
-function restoreSnapshot(snapshotId) {
-  chrome.storage.local.get(['snapshots'], (result) => {
-    const snapshot = result.snapshots.find(s => s.id === snapshotId);
-    if (snapshot) {
-      isRestoringSnapshot = true;
-      restoringTabsCount = 0;
-      restoredTabsCount = 0;
-      tabsToDiscard.clear();
-
-      // 关闭所有现有窗口
-      chrome.windows.getAll({}, (windows) => {
-        windows.forEach(window => chrome.windows.remove(window.id));
-      });
-
-      // 为每个保存的窗口创建新窗口
-      snapshot.windows.forEach((windowData, index) => {
-        chrome.windows.create({}, (newWindow) => {
-          windowData.tabs.forEach((tab, tabIndex) => {
-            if (tabIndex === 0) {
-              chrome.tabs.update(newWindow.tabs[0].id, {url: tab.url}, (updatedTab) => {
-                tabsToDiscard.add(updatedTab.id);
-                restoringTabsCount++;
-              });
-            } else {
-              chrome.tabs.create({windowId: newWindow.id, url: tab.url}, (newTab) => {
-                tabsToDiscard.add(newTab.id);
-                restoringTabsCount++;
-              });
-            }
-          });
-        });
-      });
-
-      logWithTime(`开始恢复快照,共 ${restoringTabsCount} 个标签页`);
-    }
-  });
-}
-
-function updateSettings(settings) {
-  logWithTime("更新设置: " + JSON.stringify(settings));
+function applySettings(settings) {
   autoSaveInterval = settings.autoSaveInterval;
   maxAutoSnapshots = settings.maxAutoSnapshots;
   setupAutoSave();
-  
-  // 保存设置到存储
-  chrome.storage.local.set({ settings: settings }, () => {
-    logWithTime("设置已保存");
-  });
 }
 
-// 在适当的地方调用 loadLastSavedState 函数，例如在扩展启动时
-loadLastSavedState();
+async function updateSettings(settings) {
+  const resolvedSettings = { ...TabVaultDB.DEFAULT_SETTINGS, ...settings };
+  try {
+    logWithTime("更新设置: " + JSON.stringify(resolvedSettings));
+    applySettings(resolvedSettings);
+    await TabVaultDB.saveSettings(resolvedSettings);
+    logWithTime("设置已保存");
+  } catch (error) {
+    logWithTime("保存设置时发生错误: " + error.message);
+  }
+}
+
+async function migrateFromChromeStorage() {
+  try {
+    const migrated = await TabVaultDB.getValue('migrationComplete', false);
+    if (migrated) {
+      return;
+    }
+
+    const legacyData = await chromeStorageGet(['snapshots', 'settings', 'lastSavedState']);
+    let migratedSomething = false;
+
+    if (Array.isArray(legacyData.snapshots) && legacyData.snapshots.length > 0) {
+      const normalizedSnapshots = legacyData.snapshots.map((snapshot) => TabVaultDB.normalizeSnapshot(snapshot));
+      await TabVaultDB.setSnapshots(normalizedSnapshots);
+      migratedSomething = true;
+    }
+
+    if (legacyData.settings && typeof legacyData.settings === 'object') {
+      await TabVaultDB.saveSettings(legacyData.settings);
+      migratedSomething = true;
+    }
+
+    if (legacyData.lastSavedState) {
+      await TabVaultDB.saveLastSavedState(legacyData.lastSavedState);
+      lastSavedState = legacyData.lastSavedState;
+      migratedSomething = true;
+    }
+
+    if (migratedSomething) {
+      await chromeStorageRemove(['snapshots', 'settings', 'lastSavedState']);
+      logWithTime('已将数据从 chrome.storage.local 迁移到 IndexedDB');
+    }
+
+    await TabVaultDB.setValue('migrationComplete', true);
+  } catch (error) {
+    logWithTime('迁移 chrome.storage.local 数据时出错: ' + error.message);
+  }
+}
+
+async function initializeFromDatabase() {
+  try {
+    const settings = await TabVaultDB.getSettings();
+    applySettings(settings);
+  } catch (error) {
+    logWithTime('从 IndexedDB 加载设置时出错: ' + error.message);
+  }
+  await loadLastSavedState();
+}
+
+// 初始化时先尝试从旧的 chrome.storage.local 迁移数据，再加载 IndexedDB 中的内容
+migrateFromChromeStorage().finally(() => {
+  initializeFromDatabase();
+});
+
+
+
+

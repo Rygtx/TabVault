@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
   const saveButton = document.getElementById('saveButton');
   const restoreButton = document.getElementById('restoreButton');
   const exportButton = document.getElementById('exportButton');
@@ -9,51 +9,67 @@ document.addEventListener('DOMContentLoaded', function() {
   exportButton.addEventListener('click', exportBookmarks);
   settingsButton.addEventListener('click', openSettings);
 
-  // 使用共用函数更新所有信息,传入true表示这是弹出窗口
-  updateAllInfo(true);
+  updateAllInfo(true).catch((error) => console.error('刷新快照信息失败:', error));
 });
 
 function saveCurrentTabs() {
-  chrome.runtime.sendMessage({action: "manualSave"}, (response) => {
+  chrome.runtime.sendMessage({ action: 'manualSave' }, (response) => {
     if (chrome.runtime.lastError) {
-      console.error("保存标签页时出错:", chrome.runtime.lastError);
+      console.error('保存标签页时出错:', chrome.runtime.lastError);
+      createCustomDialog('保存失败，请稍后再试', () => {}, false);
       return;
     }
-    console.log("保存响应:", response);
-    
-    // 立即更新界面
-    updateAllInfo(true);
-    
-    // 显示保存成功的对话框
-    createCustomDialog("快照已保存", () => {
-      // 对话框关闭后再次更新界面,以确保显示最新数据
-      updateAllInfo(true);
+    console.log('保存响应:', response);
+    updateAllInfo(true).catch((error) => console.error('刷新快照信息失败:', error));
+    createCustomDialog('快照已保存', () => {
+      updateAllInfo(true).catch((error) => console.error('刷新快照信息失败:', error));
     }, false);
   });
 }
 
 function restoreLatestSnapshot() {
-  chrome.storage.local.get(['snapshots'], (result) => {
-    if (result.snapshots && result.snapshots.length > 0) {
-      createCustomDialog(
-        `确定要恢复最新的快照吗？\n日期：${formatDate(result.snapshots[0].date)}`,
-        () => chrome.runtime.sendMessage({action: "restoreSnapshot", snapshotId: result.snapshots[0].id})
-      );
-    }
-  });
+  if (!window.TabVaultDB) {
+    return;
+  }
+  TabVaultDB.getSnapshots()
+    .then((snapshots) => {
+      if (snapshots && snapshots.length > 0) {
+        const latest = snapshots[0];
+        createCustomDialog(
+          `确定要恢复最新快照吗？\n时间：${formatDate(latest.date)}`,
+          () => chrome.runtime.sendMessage({ action: 'restoreSnapshot', snapshotId: latest.id }),
+          true,
+          false
+        );
+      } else {
+        createCustomDialog('没有可用的快照', () => {}, false);
+      }
+    })
+    .catch((error) => {
+      console.error('读取快照失败:', error);
+      createCustomDialog('读取快照失败，请稍后再试', () => {}, false);
+    });
 }
 
 function exportBookmarks() {
-  chrome.storage.local.get(['snapshots'], (result) => {
-    if (result.snapshots && result.snapshots.length > 0) {
+  if (!window.TabVaultDB) {
+    return;
+  }
+  TabVaultDB.getSnapshots()
+    .then((snapshots) => {
+      if (!snapshots || snapshots.length === 0) {
+        createCustomDialog('没有可导出的快照', () => {}, false);
+        return;
+      }
+
       let bookmarkStr = '';
-      result.snapshots.forEach(snapshot => {
+      snapshots.forEach((snapshot) => {
         bookmarkStr += `<DT><H3>${snapshot.name} (${formatDate(snapshot.date)})</H3>\n<DL><p>\n`;
         if (snapshot.windows && Array.isArray(snapshot.windows)) {
           snapshot.windows.forEach((window, windowIndex) => {
             bookmarkStr += `<DT><H3>窗口 ${windowIndex + 1}</H3>\n<DL><p>\n`;
             if (window.tabs && Array.isArray(window.tabs)) {
-              window.tabs.forEach(tab => {
+              window.tabs.forEach((tab) => {
                 bookmarkStr += `<DT><A HREF="${tab.url}">${tab.title}</A>\n`;
               });
             }
@@ -64,7 +80,7 @@ function exportBookmarks() {
       });
 
       if (bookmarkStr === '') {
-        createCustomDialog("没有可导出的标签页。", () => {}, false);
+        createCustomDialog('没有可导出的标签页', () => {}, false);
         return;
       }
 
@@ -75,25 +91,26 @@ function exportBookmarks() {
       <DL><p>
       ${bookmarkStr}
       </DL><p>`;
-      
-      const blob = new Blob([html], {type: 'text/html'});
+
+      const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       chrome.downloads.download({
-        url: url,
+        url,
         filename: 'tabvault_bookmarks.html'
       }, (downloadId) => {
         if (chrome.runtime.lastError) {
-          console.error("Download failed:", chrome.runtime.lastError);
-          createCustomDialog("导出失败，请重试。", () => {}, false);
+          console.error('下载失败:', chrome.runtime.lastError);
+          createCustomDialog('导出失败，请重试', () => {}, false);
         } else {
-          console.log("Download started with ID:", downloadId);
-          createCustomDialog("书签已成功导出。", () => {}, false);
+          console.log('Download started with ID:', downloadId);
+          createCustomDialog('书签已导出', () => {}, false);
         }
       });
-    } else {
-      createCustomDialog("没有可导出的快照。", () => {}, false);
-    }
-  });
+    })
+    .catch((error) => {
+      console.error('导出书签失败:', error);
+      createCustomDialog('导出失败，请稍后再试', () => {}, false);
+    });
 }
 
 function openSettings() {
@@ -101,74 +118,101 @@ function openSettings() {
 }
 
 function restoreSnapshot(snapshotId) {
-  chrome.storage.local.get(['snapshots'], (result) => {
-    const snapshot = result.snapshots.find(s => s.id === snapshotId);
-    if (snapshot) {
+  if (!window.TabVaultDB) {
+    return;
+  }
+  TabVaultDB.getSnapshotById(snapshotId)
+    .then((snapshot) => {
+      if (!snapshot) {
+        createCustomDialog('未找到对应的快照', () => {}, false);
+        return;
+      }
       createCustomDialog(
-        `确定要恢复这个快照吗？当前的标签页将被关闭。\n快照名称：${snapshot.name}\n日期：${formatDate(snapshot.date)}`,
-        () => chrome.runtime.sendMessage({action: "restoreSnapshot", snapshotId: snapshotId})
+        `确定要恢复此快照吗？当前的标签页将被关闭。\n名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
+        () => chrome.runtime.sendMessage({ action: 'restoreSnapshot', snapshotId }),
+        true,
+        false
       );
-    }
-  });
+    })
+    .catch((error) => {
+      console.error('读取快照失败:', error);
+      createCustomDialog('读取快照失败，请稍后再试', () => {}, false);
+    });
 }
 
 function renameSnapshot(snapshotId) {
-  chrome.storage.local.get(['snapshots'], (result) => {
-    const snapshot = result.snapshots.find(s => s.id === snapshotId);
-    if (snapshot) {
+  if (!window.TabVaultDB) {
+    return;
+  }
+  TabVaultDB.getSnapshotById(snapshotId)
+    .then((snapshot) => {
+      if (!snapshot) {
+        createCustomDialog('未找到对应的快照', () => {}, false);
+        return;
+      }
       createCustomDialog(
-        `请输入新的快照名称：\n当前名称：${snapshot.name}\n日期：${formatDate(snapshot.date)}`,
+        `请输入新的快照名称：\n当前名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
         (newName) => {
-          if (newName) {
-            const updatedSnapshots = result.snapshots.map(s => 
-              s.id === snapshotId ? {...s, name: newName} : s
-            );
-            chrome.storage.local.set({snapshots: updatedSnapshots}, () => {
-              loadSnapshotList(true); // 传入true表示这是弹出窗口
-              notifySnapshotsUpdated(); // 通知其他页面更新
-            });
+          if (!newName) {
+            return;
           }
+          (async () => {
+            const updated = { ...snapshot, name: newName };
+            await TabVaultDB.replaceSnapshot(updated);
+            await updateAllInfo(true);
+            notifySnapshotsUpdated();
+          })().catch((error) => {
+            console.error('重命名快照失败:', error);
+            createCustomDialog('重命名失败，请重试', () => {}, false);
+          });
         },
         true,
         true
       );
-    }
-  });
+    })
+    .catch((error) => {
+      console.error('读取快照失败:', error);
+      createCustomDialog('读取快照失败，请稍后再试', () => {}, false);
+    });
 }
 
 function deleteSnapshot(snapshotId) {
-  chrome.storage.local.get(['snapshots'], (result) => {
-    const snapshot = result.snapshots.find(s => s.id === snapshotId);
-    if (snapshot) {
+  if (!window.TabVaultDB) {
+    return;
+  }
+  TabVaultDB.getSnapshotById(snapshotId)
+    .then((snapshot) => {
+      if (!snapshot) {
+        createCustomDialog('未找到对应的快照', () => {}, false);
+        return;
+      }
       createCustomDialog(
-        `确定要删除这个快照吗？此操作不可撤销。\n快照名称：${snapshot.name}\n日期：${formatDate(snapshot.date)}`,
+        `确定要删除此快照吗？该操作无法撤销。\n名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
         () => {
-          const updatedSnapshots = result.snapshots.filter(s => s.id !== snapshotId);
-          chrome.storage.local.set({snapshots: updatedSnapshots}, () => {
-            updateAllInfo(true); // 使用共用函数更新所有信息,传入true表示这是弹出窗口
-            notifySnapshotsUpdated(); // 通知其他页面更新
+          (async () => {
+            await TabVaultDB.deleteSnapshot(snapshotId);
+            await updateAllInfo(true);
+            notifySnapshotsUpdated();
+          })().catch((error) => {
+            console.error('删除快照失败:', error);
+            createCustomDialog('删除失败，请重试', () => {}, false);
           });
         }
       );
-    }
-  });
+    })
+    .catch((error) => {
+      console.error('读取快照失败:', error);
+      createCustomDialog('读取快照失败，请稍后再试', () => {}, false);
+    });
 }
 
-// 确保这个监听器在文件的顶层
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "refreshSnapshots") {
-    updateAllInfo(true); // 使用共用函数更新所有信息,传入true表示这是弹出窗口
+chrome.runtime.onMessage.addListener((request) => {
+  if (request.action === 'refreshSnapshots') {
+    updateAllInfo(true).catch((error) => console.error('刷新快照信息失败:', error));
   }
 });
 
-// 添加这个辅助函数
 function notifySnapshotsUpdated() {
-  chrome.runtime.sendMessage({action: "snapshotsUpdated"});
+  chrome.runtime.sendMessage({ action: 'snapshotsUpdated' }, () => {});
 }
 
-// 修改这个函数以确保在弹出窗口中正确更新
-function updateAllInfo(isPopup = true) {
-  updateStorageUsage();
-  updateSnapshotCounts();
-  loadSnapshotList(isPopup);
-}

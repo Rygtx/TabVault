@@ -7,7 +7,8 @@
     "storage",
     "tabs",
     "alarms",
-    "downloads"
+    "downloads",
+    "unlimitedStorage"
   ],
   "background": {
     "service_worker": "background.js"
