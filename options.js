@@ -38,98 +38,61 @@ async function saveSettings() {
     chrome.runtime.sendMessage({ action: 'updateSettings', settings: merged }, () => {});
     createCustomDialog('设置已保存', () => {}, false);
   } catch (error) {
-    console.error('保存设置失败:', error);
-    createCustomDialog('保存设置时出错，请重试', () => {}, false);
+    handleError('保存设置失败', error);
   }
 }
 
 function restoreSnapshot(snapshotId) {
-  if (!window.TabVaultDB) {
-    return;
-  }
-  TabVaultDB.getSnapshotById(snapshotId)
-    .then((snapshot) => {
-      if (!snapshot) {
-        createCustomDialog('未找到对应的快照', () => {}, false);
-        return;
-      }
-      createCustomDialog(
-        `确定要恢复此快照吗？当前的标签页将被关闭。\n名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
-        () => chrome.runtime.sendMessage({ action: 'restoreSnapshot', snapshotId }),
-        true,
-        false
-      );
-    })
-    .catch((error) => {
-      console.error('读取快照失败:', error);
-      createCustomDialog('读取快照失败，请稍后再试', () => {}, false);
-    });
+  withSnapshot(snapshotId, (snapshot) => {
+    createCustomDialog(
+      `确定要恢复此快照吗？当前的标签页将被关闭。
+名称：${snapshot.name}
+时间：${formatDate(snapshot.date)}`,
+      () => chrome.runtime.sendMessage({ action: 'restoreSnapshot', snapshotId }),
+      true,
+      false
+    );
+  });
 }
 
 function renameSnapshot(snapshotId) {
-  if (!window.TabVaultDB) {
-    return;
-  }
-  TabVaultDB.getSnapshotById(snapshotId)
-    .then((snapshot) => {
-      if (!snapshot) {
-        createCustomDialog('未找到对应的快照', () => {}, false);
-        return;
-      }
-      createCustomDialog(
-        `请输入新的快照名称：\n当前名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
-        (newName) => {
-          if (!newName) {
-            return;
-          }
-          (async () => {
-            const updated = { ...snapshot, name: newName };
-            await TabVaultDB.replaceSnapshot(updated);
-            await updateAllInfo();
-            chrome.runtime.sendMessage({ action: 'snapshotsUpdated' }, () => {});
-          })().catch((error) => {
-            console.error('重命名快照失败:', error);
-            createCustomDialog('重命名失败，请重试', () => {}, false);
-          });
-        },
-        true,
-        true
-      );
-    })
-    .catch((error) => {
-      console.error('读取快照失败:', error);
-      createCustomDialog('读取快照失败，请稍后再试', () => {}, false);
-    });
+  withSnapshot(snapshotId, (snapshot) => {
+    createCustomDialog(
+      `请输入新的快照名称：
+当前名称：${snapshot.name}
+时间：${formatDate(snapshot.date)}`,
+      (newName) => {
+        if (!newName) {
+          return;
+        }
+        (async () => {
+          const updated = { ...snapshot, name: newName };
+          await TabVaultDB.replaceSnapshot(updated);
+          await updateAllInfo();
+          chrome.runtime.sendMessage({ action: 'snapshotsUpdated' }, () => {});
+        })().catch((error) => handleError('重命名快照失败', error));
+      },
+      true,
+      true
+    );
+  });
 }
 
 function deleteSnapshot(snapshotId) {
-  if (!window.TabVaultDB) {
-    return;
-  }
-  TabVaultDB.getSnapshotById(snapshotId)
-    .then((snapshot) => {
-      if (!snapshot) {
-        createCustomDialog('未找到对应的快照', () => {}, false);
-        return;
+  withSnapshot(snapshotId, (snapshot) => {
+    createCustomDialog(
+      `确定要删除此快照吗？该操作无法撤销。
+名称：${snapshot.name}
+时间：${formatDate(snapshot.date)}`,
+      () => {
+        (async () => {
+          await TabVaultDB.deleteSnapshot(snapshotId);
+          await updateAllInfo();
+          chrome.runtime.sendMessage({ action: 'snapshotsUpdated' }, () => {});
+        })().catch((error) => handleError('删除快照失败', error));
       }
-      createCustomDialog(
-        `确定要删除此快照吗？该操作无法撤销。\n名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
-        () => {
-          (async () => {
-            await TabVaultDB.deleteSnapshot(snapshotId);
-            await updateAllInfo();
-            chrome.runtime.sendMessage({ action: 'snapshotsUpdated' }, () => {});
-          })().catch((error) => {
-            console.error('删除快照失败:', error);
-            createCustomDialog('删除失败，请重试', () => {}, false);
-          });
-        }
-      );
-    })
-    .catch((error) => {
-      console.error('读取快照失败:', error);
-      createCustomDialog('读取快照失败，请稍后再试', () => {}, false);
-    });
+    );
+  });
 }
 
 async function saveSnapshot(snapshot) {
@@ -138,18 +101,42 @@ async function saveSnapshot(snapshot) {
   }
   try {
     const settings = await TabVaultDB.getSettings();
-    const snapshots = await TabVaultDB.getSnapshots();
-    const autoSnapshots = snapshots.filter((s) => TabVaultDB.isAutoSnapshotName(s.name));
-    if (TabVaultDB.isAutoSnapshotName(snapshot.name) && autoSnapshots.length >= settings.maxAutoSnapshots) {
-      console.log('已达到自动快照数量上限，无法继续保存。');
-      return;
+    const allowedAutoSnapshots = Math.max(
+      Number.isFinite(settings.maxAutoSnapshots) ? settings.maxAutoSnapshots : TabVaultDB.DEFAULT_SETTINGS.maxAutoSnapshots,
+      0
+    );
+    let trimmedAutoSnapshots = 0;
+
+    await TabVaultDB.updateSnapshots((existing) => {
+      const list = Array.isArray(existing) ? existing.slice() : [];
+      list.unshift(snapshot);
+
+      if (!TabVaultDB.isAutoSnapshotName(snapshot.name)) {
+        return list;
+      }
+
+      let remaining = allowedAutoSnapshots;
+      return list.filter((item) => {
+        if (!TabVaultDB.isAutoSnapshotName(item.name)) {
+          return true;
+        }
+        if (remaining > 0) {
+          remaining -= 1;
+          return true;
+        }
+        trimmedAutoSnapshots += 1;
+        return false;
+      });
+    });
+
+    if (trimmedAutoSnapshots > 0) {
+      console.log(`已移除 ${trimmedAutoSnapshots} 个超出的自动快照。`);
     }
-    await TabVaultDB.addSnapshot(snapshot);
+
     await updateAllInfo();
     chrome.runtime.sendMessage({ action: 'snapshotsUpdated' }, () => {});
   } catch (error) {
-    console.error('保存快照失败:', error);
-    createCustomDialog('保存快照失败，请稍后重试', () => {}, false);
+    handleError('保存快照失败', error);
   }
 }
 
@@ -159,4 +146,23 @@ chrome.runtime.onMessage.addListener((request) => {
   }
 });
 
+function handleError(message, error) {
+  console.error(message + ':', error);
+  createCustomDialog(`${message}，请稍后再试`, () => {}, false);
+}
 
+async function withSnapshot(snapshotId, handler) {
+  if (!window.TabVaultDB) {
+    return;
+  }
+  try {
+    const snapshot = await TabVaultDB.getSnapshotById(snapshotId);
+    if (!snapshot) {
+      createCustomDialog('未找到对应的快照', () => {}, false);
+      return;
+    }
+    await handler(snapshot);
+  } catch (error) {
+    handleError('读取快照失败', error);
+  }
+}

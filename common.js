@@ -1,13 +1,15 @@
 function createCustomDialog(message, onConfirm, showCancel = true, showInput = false) {
   const dialog = document.createElement('div');
   dialog.className = 'custom-dialog';
+  const rawMessage = typeof message === 'string' ? message : String(message ?? '');
+  const formattedMessage = rawMessage.replace(/\n/g, '<br>');
   dialog.innerHTML = `
-    <div class="dialog-content">
-      <p>${message}</p>
-      ${showInput ? '<input type="text" id="dialogInput">' : ''}
+    <div class="dialog-content glass-card">
+      <p>${formattedMessage}</p>
+      ${showInput ? '<input type="text" id="dialogInput" autocomplete="off">' : ''}
       <div class="dialog-buttons">
-        <button id="confirmBtn">确认</button>
-        ${showCancel ? '<button id="cancelBtn">取消</button>' : ''}
+        <button id="confirmBtn" class="dialog-button dialog-button--confirm">确认</button>
+        ${showCancel ? '<button id="cancelBtn" class="dialog-button dialog-button--cancel">取消</button>' : ''}
       </div>
     </div>
   `;
@@ -64,7 +66,7 @@ async function updateStorageUsage() {
 
     const progressElement = document.getElementById('storageProgress');
     if (progressElement) {
-      const percentage = Math.min(100, (ratio * 100));
+      const percentage = Math.min(100, ratio * 100);
       progressElement.style.width = `${percentage.toFixed(2)}%`;
     }
   } catch (error) {
@@ -95,7 +97,7 @@ async function loadSnapshotList(isPopup = false) {
   try {
     const snapshots = await TabVaultDB.getSnapshots();
     if (!Array.isArray(snapshots) || snapshots.length === 0) {
-      snapshotList.innerHTML = '<div class="empty-state">暂无快照</div>';
+      snapshotList.innerHTML = '<div class="empty-state glass-card">暂无快照</div>';
       return;
     }
 
@@ -110,25 +112,25 @@ async function loadSnapshotList(isPopup = false) {
                   </div>
                 `).join('');
             return `
-              <div class="window-item">
+              <div class="window-item glass-card">
                 <div class="window-header">窗口 ${windowIndex + 1}</div>
-                ${tabItems || '<div class="tab-item">无标签页信息</div>'}
+                ${tabItems || '<div class="tab-item tab-item--empty">无标签页信息</div>'}
               </div>
             `;
           }).join('')
         : '';
 
       return `
-        <div class="snapshot-item">
+        <div class="snapshot-item glass-card">
           <div class="snapshot-header">
             <span class="snapshot-name">${snapshot.name}</span>
           </div>
           <div class="snapshot-subheader">
             <span class="snapshot-date">${formatDate(snapshot.date)}</span>
             <div class="snapshot-actions">
-              <button class="restore-btn" data-id="${snapshot.id}">恢复</button>
-              <button class="rename-btn" data-id="${snapshot.id}">重命名</button>
-              <button class="delete-btn" data-id="${snapshot.id}">删除</button>
+              <button class="snapshot-action snapshot-action--primary" data-action="restore" data-id="${snapshot.id}">恢复</button>
+              <button class="snapshot-action snapshot-action--accent" data-action="rename" data-id="${snapshot.id}">重命名</button>
+              <button class="snapshot-action snapshot-action--danger" data-action="delete" data-id="${snapshot.id}">删除</button>
             </div>
           </div>
           ${windowDetails ? `<div class="snapshot-details">${windowDetails}</div>` : ''}
@@ -138,13 +140,13 @@ async function loadSnapshotList(isPopup = false) {
 
     snapshotList.innerHTML = listHtml;
 
-    snapshotList.querySelectorAll('.restore-btn').forEach((btn) => {
+    snapshotList.querySelectorAll('[data-action="restore"]').forEach((btn) => {
       btn.addEventListener('click', () => restoreSnapshot(Number(btn.dataset.id)));
     });
-    snapshotList.querySelectorAll('.rename-btn').forEach((btn) => {
+    snapshotList.querySelectorAll('[data-action="rename"]').forEach((btn) => {
       btn.addEventListener('click', () => renameSnapshot(Number(btn.dataset.id)));
     });
-    snapshotList.querySelectorAll('.delete-btn').forEach((btn) => {
+    snapshotList.querySelectorAll('[data-action="delete"]').forEach((btn) => {
       btn.addEventListener('click', () => deleteSnapshot(Number(btn.dataset.id)));
     });
   } catch (error) {
@@ -159,4 +161,3 @@ async function updateAllInfo(isPopup = false) {
     loadSnapshotList(isPopup)
   ]);
 }
-

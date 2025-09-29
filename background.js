@@ -51,6 +51,30 @@ function chromeStorageRemove(keys) {
   });
 }
 
+function getAllTabs(queryOptions = {}) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.query(queryOptions, (tabs) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(tabs || []);
+      }
+    });
+  });
+}
+
+function sendMessageToTab(tabId, message) {
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, message, () => {
+      if (chrome.runtime.lastError) {
+        resolve({ ok: false, error: chrome.runtime.lastError.message });
+      } else {
+        resolve({ ok: true });
+      }
+    });
+  });
+}
+
 // 添加 MD5 哈希函数
 function md5(string) {
   function RotateLeft(lValue, iShiftBits) {
@@ -325,7 +349,7 @@ async function saveCurrentTabs(isAuto) {
   logWithTime(`准备保存当前标签页 (自动: ${isAuto})`);
   try {
     const windows = await getAllWindows({ populate: true });
-    const hasOpenTabs = windows.some(window => window.tabs && window.tabs.length > 0);
+    const hasOpenTabs = windows.some((window) => window.tabs && window.tabs.length > 0);
 
     if (!hasOpenTabs) {
       logWithTime("未检测到打开的标签页，取消保存");
@@ -336,38 +360,55 @@ async function saveCurrentTabs(isAuto) {
       id: Date.now(),
       name: isAuto ? TabVaultDB.SNAPSHOT_NAME_AUTO : TabVaultDB.SNAPSHOT_NAME_MANUAL,
       date: new Date().toISOString(),
-      windows: windows.map(window => ({
+      windows: windows.map((window) => ({
         id: window.id,
-        tabs: window.tabs.map(tab => ({ url: tab.url, title: tab.title }))
+        tabs: window.tabs.map((tab) => ({ url: tab.url, title: tab.title }))
       }))
     };
 
     const settings = await TabVaultDB.getSettings();
-    let snapshots = await TabVaultDB.getSnapshots();
+    const allowedAutoSnapshots = Math.max(
+      Number.isFinite(settings.maxAutoSnapshots) ? settings.maxAutoSnapshots : maxAutoSnapshots,
+      0
+    );
+    let trimmedAutoSnapshots = 0;
 
-    snapshots.unshift(snapshot);
+    await TabVaultDB.updateSnapshots((existing) => {
+      const list = Array.isArray(existing) ? existing.slice() : [];
+      list.unshift(snapshot);
 
-    if (isAuto) {
-      const autoSnapshots = snapshots.filter((s) => TabVaultDB.isAutoSnapshotName(s.name));
-      const currentMaxAutoSnapshots = settings.maxAutoSnapshots || maxAutoSnapshots;
-      if (autoSnapshots.length > currentMaxAutoSnapshots) {
-        logWithTime(`移除超出的自动快照。当前: ${autoSnapshots.length}, 限制: ${currentMaxAutoSnapshots}`);
-        snapshots = snapshots.filter((s) => !TabVaultDB.isAutoSnapshotName(s.name) || autoSnapshots.indexOf(s) < currentMaxAutoSnapshots);
+      if (!isAuto) {
+        return list;
       }
+
+      let remaining = allowedAutoSnapshots;
+      return list.filter((item) => {
+        if (!TabVaultDB.isAutoSnapshotName(item.name)) {
+          return true;
+        }
+        if (remaining > 0) {
+          remaining -= 1;
+          return true;
+        }
+        trimmedAutoSnapshots += 1;
+        return false;
+      });
+    });
+
+    if (trimmedAutoSnapshots > 0) {
+      logWithTime(`移除了 ${trimmedAutoSnapshots} 个超出的自动快照`);
     }
 
-    await TabVaultDB.setSnapshots(snapshots);
-
-    const hashInput = snapshot.windows.map(w => ({
-      id: w.id,
-      tabs: w.tabs.map(t => t.url)
+    const hashInput = snapshot.windows.map((window) => ({
+      id: window.id,
+      tabs: window.tabs.map((tab) => tab.url)
     }));
     lastSavedState = md5(JSON.stringify(hashInput));
     await TabVaultDB.saveLastSavedState(lastSavedState);
-    logWithTime("保存 lastSavedState: " + lastSavedState);
+    logWithTime("已保存 lastSavedState: " + lastSavedState);
 
-    chrome.runtime.sendMessage({ action: "refreshSnapshots" })
-      .catch(error => {
+    chrome.runtime.sendMessage({ action: 'refreshSnapshots' })
+      .catch((error) => {
         logWithTime("广播刷新快照消息时出错: " + error.message);
       });
   } catch (error) {
@@ -493,14 +534,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       updateSettings(request.settings);
       break;
     case "snapshotsUpdated":
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach((tab) => {
-          chrome.tabs.sendMessage(tab.id, { action: "refreshSnapshots" })
-            .catch((error) => {
-              logWithTime(`向标签页 ${tab.id} 发送消息时出错: ${error.message}`);
-            });
+      getAllTabs()
+        .then((tabs) => Promise.all(
+          tabs.map((tab) =>
+            sendMessageToTab(tab.id, { action: "refreshSnapshots" })
+              .then((result) => ({ tabId: tab.id, ...result }))
+          )
+        ))
+        .then((results) => {
+          results.forEach(({ tabId, ok, error }) => {
+            if (!ok && error) {
+              logWithTime(`向标签页 ${tabId} 发送消息时出错: ${error}`);
+            }
+          });
+        })
+        .catch((error) => {
+          logWithTime("广播刷新快照消息时出错: " + error.message);
         });
-      });
       break;
   }
   sendResponse({ status: "消息已接收" });
