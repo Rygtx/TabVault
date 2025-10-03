@@ -534,7 +534,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 function applySettings(settings) {
   autoSaveInterval = settings.autoSaveInterval;
-  maxAutoSnapshots = settings.maxAutoSnapshots;
+  maxAutoSnapshots = Math.max(Number.isFinite(settings.maxAutoSnapshots) ? settings.maxAutoSnapshots : TabVaultDB.DEFAULT_SETTINGS.maxAutoSnapshots, 0);
   setupAutoSave();
 }
 

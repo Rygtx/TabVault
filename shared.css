@@ -437,24 +437,28 @@ body:not(.options-page) .snapshot-item {
 
 .snapshot-actions {
     display: flex;
+    flex: 1 1 100%;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-left: auto;
-    align-items: center;
-    justify-content: flex-end;
+    gap: 12px;
+    margin-left: 0;
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: 8px;
 }
 
 .snapshot-action {
-    flex: 0 1 auto;
-    min-width: 92px;
+    flex: 1 1 0;
+    min-width: 0;
     border-radius: var(--radius-pill);
     border: 1px solid var(--surface-border);
-    padding: 8px 16px;
+    padding: 10px 0;
     font-size: 13px;
     font-weight: 600;
     color: white;
     box-shadow: var(--shadow-light);
     background: linear-gradient(180deg, rgba(0, 122, 255, 0.75), rgba(52, 199, 89, 0.75));
+    text-align: center;
     cursor: pointer;
     transition: transform 0.16s ease, filter 0.16s ease;
 }

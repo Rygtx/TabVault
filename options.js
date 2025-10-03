@@ -14,7 +14,7 @@ async function loadSettings() {
   try {
     const settings = await TabVaultDB.getSettings();
     document.getElementById('autoSaveInterval').value = settings.autoSaveInterval;
-    document.getElementById('maxAutoSnapshots').value = settings.maxAutoSnapshots;
+    document.getElementById('maxAutoSnapshots').value = Math.max(settings.maxAutoSnapshots ?? TabVaultDB.DEFAULT_SETTINGS.maxAutoSnapshots, 0);
   } catch (error) {
     console.error('加载设置失败:', error);
   }
@@ -30,7 +30,7 @@ async function saveSettings() {
 
   const settings = {
     autoSaveInterval: Number.isFinite(parsedInterval) ? parsedInterval : TabVaultDB.DEFAULT_SETTINGS.autoSaveInterval,
-    maxAutoSnapshots: Number.isFinite(parsedLimit) ? parsedLimit : TabVaultDB.DEFAULT_SETTINGS.maxAutoSnapshots
+    maxAutoSnapshots: Number.isFinite(parsedLimit) ? Math.max(parsedLimit, 0) : TabVaultDB.DEFAULT_SETTINGS.maxAutoSnapshots
   };
 
   try {
