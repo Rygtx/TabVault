@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="options-root">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,26 +7,64 @@
     <link rel="stylesheet" href="shared.css">
 </head>
 <body class="options-page">
-    <div class="app-shell glass-card">
-        <h1>TabVault 设置</h1>
-        <div class="setting-group">
-            <label for="autoSaveInterval">自动保存间隔（分钟）</label>
-            <input type="number" id="autoSaveInterval" min="1" max="1440">
+    <div class="app-shell options-shell">
+        <header class="options-header">
+            <div>
+                <h1>TabVault 控制中心</h1>
+                <p class="options-subtitle">配置自动保存策略，查看快照占用与历史记录。</p>
+            </div>
+        </header>
+
+        <div class="options-grid">
+            <section class="settings-panel">
+                <h2 class="panel-title">自动保存设置</h2>
+                <p class="panel-description">设定自动保存频率与保留数量，让工作空间保持可追溯。</p>
+                <div class="setting-group">
+                    <label for="autoSaveInterval">自动保存间隔（分钟）</label>
+                    <input type="number" id="autoSaveInterval" min="1" max="1440">
+                </div>
+                <div class="setting-group">
+                    <label for="maxAutoSnapshots">保留的自动快照数量</label>
+                    <input type="number" id="maxAutoSnapshots" min="1" max="100">
+                </div>
+                <button id="saveSettings" class="round-button action-save">保存设置</button>
+            </section>
+
+            <section class="insights-panel">
+                <h2 class="panel-title">用量概览</h2>
+                <p class="panel-description">实时查看当前存储占用与快照数量，及时掌握空间使用情况。</p>
+                <article class="metric-card metric-card--stacked">
+                    <div class="metric-header">
+                        <span class="metric-title">存储空间</span>
+                        <span class="metric-chip">IndexedDB</span>
+                    </div>
+                    <p id="storageUsage" class="metric-value">—</p>
+                    <div class="progress-bar">
+                        <div id="storageProgress" class="progress"></div>
+                    </div>
+                </article>
+                <article class="metric-card metric-card--stacked">
+                    <div class="metric-header">
+                        <span class="metric-title">快照统计</span>
+                        <span class="metric-chip metric-chip-alt">实时</span>
+                    </div>
+                    <p id="snapshotCounts" class="metric-value metric-value-muted">—</p>
+                </article>
+            </section>
         </div>
-        <div class="setting-group">
-            <label for="maxAutoSnapshots">保留的自动快照数量</label>
-            <input type="number" id="maxAutoSnapshots" min="1" max="100">
-        </div>
-        <button id="saveSettings" class="round-button">保存设置</button>
-        <div class="storage-usage">
-            <div id="storageUsage" class="info-text"></div>
-        </div>
-        <div class="progress-bar">
-            <div id="storageProgress" class="progress"></div>
-        </div>
-        <div id="snapshotCounts" class="info-text"></div>
-        <div id="snapshotList" class="snapshot-list"></div>
+
+        <section class="snapshot-board snapshot-board--options">
+            <div class="snapshot-board__header">
+                <div>
+                    <h2 class="snapshot-board__title">快照列表</h2>
+                    <p class="snapshot-board__subtitle">包含所有手动与自动快照，可在此执行恢复、重命名与删除操作。</p>
+                </div>
+                <span class="snapshot-board__hint">数据实时同步</span>
+            </div>
+            <div id="snapshotList" class="snapshot-list"></div>
+        </section>
     </div>
+
     <script src="db.js"></script>
     <script src="common.js"></script>
     <script src="options.js"></script>

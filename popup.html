@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="popup-root">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,17 +7,55 @@
     <link rel="stylesheet" href="shared.css">
 </head>
 <body>
-    <div class="app-shell glass-card">
-        <div class="button-group">
-            <button id="saveButton" class="round-button">保存</button>
-            <button id="restoreButton" class="round-button">恢复</button>
-            <button id="exportButton" class="round-button">导出</button>
-            <button id="settingsButton" class="round-button">设置</button>
-        </div>
-        <div id="storageUsage" class="info-text"></div>
-        <div id="snapshotCounts" class="info-text"></div>
-        <div id="snapshotList" class="snapshot-list"></div>
+    <div class="app-shell popup-shell">
+        <header class="popup-header">
+            <div class="popup-branding">
+                <h1 class="popup-title">TabVault</h1>
+                <p class="popup-subtitle">快速保存与还原你的标签页组合</p>
+            </div>
+            <button id="settingsButton" class="icon-button" aria-label="打开设置">
+                <span>设置</span>
+            </button>
+        </header>
+
+        <section class="primary-actions">
+            <button id="saveButton" class="round-button action-save">保存快照</button>
+            <button id="restoreButton" class="round-button action-restore">恢复快照</button>
+            <button id="exportButton" class="round-button action-export">导出书签</button>
+        </section>
+
+        <section class="metrics-panel">
+            <article class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">存储空间</span>
+                    <span class="metric-chip">IndexedDB</span>
+                </div>
+                <p id="storageUsage" class="metric-value">—</p>
+                <div class="progress-bar">
+                    <div id="storageProgress" class="progress"></div>
+                </div>
+            </article>
+            <article class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">快照统计</span>
+                    <span class="metric-chip metric-chip-alt">实时</span>
+                </div>
+                <p id="snapshotCounts" class="metric-value metric-value-muted">—</p>
+            </article>
+        </section>
+
+        <section class="snapshot-board">
+            <div class="snapshot-board__header">
+                <div>
+                    <h2 class="snapshot-board__title">快照列表</h2>
+                    <p class="snapshot-board__subtitle">手动与自动快照集中展示，可快速恢复、重命名或删除。</p>
+                </div>
+                <span class="snapshot-board__hint">列表自动同步最新状态</span>
+            </div>
+            <div id="snapshotList" class="snapshot-list"></div>
+        </section>
     </div>
+
     <script src="db.js"></script>
     <script src="common.js"></script>
     <script src="popup.js"></script>

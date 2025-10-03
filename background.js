@@ -27,30 +27,6 @@ function getAllWindows(options) {
   });
 }
 
-function chromeStorageGet(keys) {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get(keys, (items) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve(items);
-      }
-    });
-  });
-}
-
-function chromeStorageRemove(keys) {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.remove(keys, () => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve();
-      }
-    });
-  });
-}
-
 function getAllTabs(queryOptions = {}) {
   return new Promise((resolve, reject) => {
     chrome.tabs.query(queryOptions, (tabs) => {
@@ -574,44 +550,6 @@ async function updateSettings(settings) {
   }
 }
 
-async function migrateFromChromeStorage() {
-  try {
-    const migrated = await TabVaultDB.getValue('migrationComplete', false);
-    if (migrated) {
-      return;
-    }
-
-    const legacyData = await chromeStorageGet(['snapshots', 'settings', 'lastSavedState']);
-    let migratedSomething = false;
-
-    if (Array.isArray(legacyData.snapshots) && legacyData.snapshots.length > 0) {
-      const normalizedSnapshots = legacyData.snapshots.map((snapshot) => TabVaultDB.normalizeSnapshot(snapshot));
-      await TabVaultDB.setSnapshots(normalizedSnapshots);
-      migratedSomething = true;
-    }
-
-    if (legacyData.settings && typeof legacyData.settings === 'object') {
-      await TabVaultDB.saveSettings(legacyData.settings);
-      migratedSomething = true;
-    }
-
-    if (legacyData.lastSavedState) {
-      await TabVaultDB.saveLastSavedState(legacyData.lastSavedState);
-      lastSavedState = legacyData.lastSavedState;
-      migratedSomething = true;
-    }
-
-    if (migratedSomething) {
-      await chromeStorageRemove(['snapshots', 'settings', 'lastSavedState']);
-      logWithTime('已将数据从 chrome.storage.local 迁移到 IndexedDB');
-    }
-
-    await TabVaultDB.setValue('migrationComplete', true);
-  } catch (error) {
-    logWithTime('迁移 chrome.storage.local 数据时出错: ' + error.message);
-  }
-}
-
 async function initializeFromDatabase() {
   try {
     const settings = await TabVaultDB.getSettings();
@@ -622,11 +560,8 @@ async function initializeFromDatabase() {
   await loadLastSavedState();
 }
 
-// 初始化时先尝试从旧的 chrome.storage.local 迁移数据，再加载 IndexedDB 中的内容
-migrateFromChromeStorage().finally(() => {
-  initializeFromDatabase();
-});
-
+// 初始化时直接加载 IndexedDB 中的内容
+initializeFromDatabase();
 
 
 

@@ -25,12 +25,12 @@ async function saveSettings() {
     return;
   }
 
-  const parsedAuto = parseInt(document.getElementById('autoSaveInterval').value, 10);
-  const parsedMax = parseInt(document.getElementById('maxAutoSnapshots').value, 10);
+  const parsedInterval = parseInt(document.getElementById('autoSaveInterval').value, 10);
+  const parsedLimit = parseInt(document.getElementById('maxAutoSnapshots').value, 10);
 
   const settings = {
-    autoSaveInterval: Number.isFinite(parsedAuto) ? parsedAuto : TabVaultDB.DEFAULT_SETTINGS.autoSaveInterval,
-    maxAutoSnapshots: Number.isFinite(parsedMax) ? parsedMax : TabVaultDB.DEFAULT_SETTINGS.maxAutoSnapshots
+    autoSaveInterval: Number.isFinite(parsedInterval) ? parsedInterval : TabVaultDB.DEFAULT_SETTINGS.autoSaveInterval,
+    maxAutoSnapshots: Number.isFinite(parsedLimit) ? parsedLimit : TabVaultDB.DEFAULT_SETTINGS.maxAutoSnapshots
   };
 
   try {
@@ -45,9 +45,7 @@ async function saveSettings() {
 function restoreSnapshot(snapshotId) {
   withSnapshot(snapshotId, (snapshot) => {
     createCustomDialog(
-      `确定要恢复此快照吗？当前的标签页将被关闭。
-名称：${snapshot.name}
-时间：${formatDate(snapshot.date)}`,
+      `确定要恢复此快照吗？当前的标签页将被关闭。\n名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
       () => chrome.runtime.sendMessage({ action: 'restoreSnapshot', snapshotId }),
       true,
       false
@@ -58,9 +56,7 @@ function restoreSnapshot(snapshotId) {
 function renameSnapshot(snapshotId) {
   withSnapshot(snapshotId, (snapshot) => {
     createCustomDialog(
-      `请输入新的快照名称：
-当前名称：${snapshot.name}
-时间：${formatDate(snapshot.date)}`,
+      `请输入新的快照名称：\n当前名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
       (newName) => {
         if (!newName) {
           return;
@@ -81,9 +77,7 @@ function renameSnapshot(snapshotId) {
 function deleteSnapshot(snapshotId) {
   withSnapshot(snapshotId, (snapshot) => {
     createCustomDialog(
-      `确定要删除此快照吗？该操作无法撤销。
-名称：${snapshot.name}
-时间：${formatDate(snapshot.date)}`,
+      `确定要删除此快照吗？该操作无法撤销。\n名称：${snapshot.name}\n时间：${formatDate(snapshot.date)}`,
       () => {
         (async () => {
           await TabVaultDB.deleteSnapshot(snapshotId);
@@ -130,7 +124,7 @@ async function saveSnapshot(snapshot) {
     });
 
     if (trimmedAutoSnapshots > 0) {
-      console.log(`已移除 ${trimmedAutoSnapshots} 个超出的自动快照。`);
+      console.log(`移除了 ${trimmedAutoSnapshots} 个超出的自动快照。`);
     }
 
     await updateAllInfo();
