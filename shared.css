@@ -562,14 +562,12 @@ body:not(.options-page) .snapshot-item {
     flex-direction: column;
     gap: 10px;
     position: relative;
-}
-
-.tab-list--scroll {
     max-height: 260px;
     overflow-y: auto;
     padding-right: 6px;
     scroll-behavior: smooth;
 }
+
 
 .tab-list--scroll::after {
     content: '';
@@ -626,6 +624,14 @@ body:not(.options-page) .snapshot-item {
     font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tab-url {

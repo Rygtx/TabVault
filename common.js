@@ -147,8 +147,7 @@ async function loadSnapshotList(isPopup = false) {
                     </div>
                   </div>
                 `).join('');
-            const needsScroll = tabs.length > 12;
-            const tabListClass = needsScroll ? 'tab-list tab-list--scroll' : 'tab-list';
+            const tabListClass = 'tab-list';
                         return `
               <section class="window-item">
                 <header class="window-header">
@@ -206,6 +205,11 @@ async function loadSnapshotList(isPopup = false) {
 
 
     snapshotList.innerHTML = listHtml;
+
+    snapshotList.querySelectorAll('.tab-list').forEach((list) => {
+      const hasOverflow = list.scrollHeight > list.clientHeight + 1;
+      list.classList.toggle('tab-list--scroll', hasOverflow);
+    });
 
 
 
