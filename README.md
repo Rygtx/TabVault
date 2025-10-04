@@ -39,7 +39,7 @@ TabVault 是一款面向 Chrome 浏览器的标签页快照管理扩展，帮助
 - 项目基于原生 Chrome 扩展 API，主要使用 JavaScript、HTML、CSS 实现。
 - 代码结构：
   - manifest.json：扩展配置入口。
-  - ackground.js：后台任务、自动快照调度与消息分发。
+  - background.js：后台任务、自动快照调度与消息分发。
   - popup.*：弹出面板界面及交互逻辑。
   - options.*：选项页配置界面。
   - db.js：IndexedDB 封装与数据持久化。
