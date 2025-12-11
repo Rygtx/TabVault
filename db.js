@@ -11,6 +11,18 @@
 
   let dbPromise = null;
 
+  // ============================================
+  // 存储用量缓存（用于优化 estimateUsage）
+  // ============================================
+  let usageCache = null;
+  let usageCacheTimestamp = 0;
+  const USAGE_CACHE_TTL = 5000; // 缓存有效期 5 秒
+
+  function invalidateUsageCache() {
+    usageCache = null;
+    usageCacheTimestamp = 0;
+  }
+
   function cloneValue(value) {
     if (typeof structuredClone === 'function') {
       return structuredClone(value);
@@ -111,15 +123,18 @@
   async function setSnapshots(snapshots) {
     if (!Array.isArray(snapshots)) {
       await setValue('snapshots', []);
+      invalidateUsageCache(); // 使缓存失效
       return;
     }
     await setValue('snapshots', snapshots.map(normalizeSnapshot));
+    invalidateUsageCache(); // 使缓存失效
   }
 
   async function updateSnapshots(updater) {
     const snapshots = await getSnapshots();
     const updated = updater(Array.isArray(snapshots) ? snapshots.slice() : []);
     await setSnapshots(updated);
+    // 注意：setSnapshots 已经调用了 invalidateUsageCache
     return updated;
   }
 
@@ -167,20 +182,84 @@
     return hash;
   }
 
-  async function estimateUsage() {
+  // ============================================
+  // 优化：递归计算对象大小，避免完整 JSON.stringify
+  // ============================================
+  function estimateObjectSize(obj, visited = new WeakSet()) {
+    if (obj === null || obj === undefined) {
+      return 4; // "null" 或 "undefined" 的近似长度
+    }
+
+    const type = typeof obj;
+
+    if (type === 'string') {
+      // 字符串：UTF-8 编码长度 + 引号
+      return obj.length * 2 + 2;
+    }
+
+    if (type === 'number' || type === 'boolean') {
+      return String(obj).length;
+    }
+
+    if (type !== 'object') {
+      return 0;
+    }
+
+    // 避免循环引用
+    if (visited.has(obj)) {
+      return 0;
+    }
+    visited.add(obj);
+
+    if (Array.isArray(obj)) {
+      let size = 2; // []
+      for (let i = 0; i < obj.length; i++) {
+        size += estimateObjectSize(obj[i], visited);
+        if (i < obj.length - 1) size += 1; // 逗号
+      }
+      return size;
+    }
+
+    // 普通对象
+    let size = 2; // {}
+    const keys = Object.keys(obj);
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      size += key.length + 3; // "key":
+      size += estimateObjectSize(obj[key], visited);
+      if (i < keys.length - 1) size += 1; // 逗号
+    }
+    return size;
+  }
+
+  async function estimateUsage(forceRefresh = false) {
+    const now = Date.now();
+
+    // 如果缓存有效且不强制刷新，直接返回缓存
+    if (!forceRefresh && usageCache && (now - usageCacheTimestamp) < USAGE_CACHE_TTL) {
+      return usageCache;
+    }
+
     const [snapshots, settings, lastSavedState] = await Promise.all([
       getSnapshots(),
       getSettings(),
       getLastSavedState()
     ]);
-    const encoder = new TextEncoder();
-    const payload = { snapshots, settings, lastSavedState };
-    const bytes = encoder.encode(JSON.stringify(payload)).byteLength;
-    return {
+
+    // 使用优化的大小估算方法
+    const bytes = estimateObjectSize({ snapshots, settings, lastSavedState });
+
+    const result = {
       bytes,
       totalBytes: DEFAULT_STORAGE_LIMIT,
       ratio: Math.min(1, bytes / DEFAULT_STORAGE_LIMIT)
     };
+
+    // 更新缓存
+    usageCache = result;
+    usageCacheTimestamp = now;
+
+    return result;
   }
 
   const api = {

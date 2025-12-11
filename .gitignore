@@ -15,3 +15,6 @@ build/
 
 # 忽略日志文件
 *.log
+
+# 忽略私钥文件
+TabVault.pem
