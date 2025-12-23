@@ -5,6 +5,51 @@ const BATCH_SIZE = 10; // 每批渲染的快照数量
 const BATCH_DELAY = 0;  // 批次间的延迟（毫秒），使用0让浏览器有机会处理其他任务
 
 // ============================================
+// 分页系统：配置和状态
+// ============================================
+const DEFAULT_PAGE_SIZE = 50; // 默认每页显示的快照数量
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]; // 可选的每页数量
+const PAGE_SIZE_STORAGE_KEY = 'tabvault_page_size'; // 存储键名
+
+let paginationState = {
+  currentPage: 1,
+  totalPages: 1,
+  totalSnapshots: 0,
+  pageSize: DEFAULT_PAGE_SIZE, // 当前每页数量
+  allSnapshots: [], // 缓存所有快照数据
+  isPopup: false
+};
+
+// ============================================
+// 分页系统：持久化页面大小
+// ============================================
+function savePageSize(size) {
+  try {
+    localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(size));
+  } catch (e) {
+    console.warn('无法保存页面大小设置:', e);
+  }
+}
+
+function loadPageSize() {
+  try {
+    const saved = localStorage.getItem(PAGE_SIZE_STORAGE_KEY);
+    if (saved) {
+      const size = parseInt(saved, 10);
+      if (PAGE_SIZE_OPTIONS.includes(size)) {
+        return size;
+      }
+    }
+  } catch (e) {
+    console.warn('无法加载页面大小设置:', e);
+  }
+  return DEFAULT_PAGE_SIZE;
+}
+
+// 初始化时加载保存的页面大小
+paginationState.pageSize = loadPageSize();
+
+// ============================================
 // 对话框函数
 // ============================================
 function createCustomDialog(message, onConfirm, showCancel = true, showInput = false) {
@@ -239,6 +284,230 @@ function setupEventDelegation(snapshotList) {
 }
 
 // ============================================
+// 分页系统：生成页面大小选择器
+// ============================================
+function generatePageSizeSelector() {
+  const { pageSize } = paginationState;
+
+  const options = PAGE_SIZE_OPTIONS.map(size => {
+    const selected = size === pageSize ? 'selected' : '';
+    return `<option value="${size}" ${selected}>${size} 条/页</option>`;
+  }).join('');
+
+  return `
+    <div class="page-size-selector">
+      <label class="page-size-label">每页显示</label>
+      <select class="page-size-select" id="pageSizeSelect">
+        ${options}
+      </select>
+    </div>
+  `;
+}
+
+// ============================================
+// 分页系统：生成分页控件
+// ============================================
+function generatePaginationHtml() {
+  const { currentPage, totalPages, totalSnapshots } = paginationState;
+
+  // 始终显示页面大小选择器（即使只有一页）
+  const pageSizeSelector = generatePageSizeSelector();
+
+  if (totalPages <= 1) {
+    // 只有一页时，只显示页面大小选择器和信息
+    return `
+      <div class="pagination-container pagination-container--minimal">
+        <div class="pagination-row">
+          <div class="pagination-info">
+            <span class="pagination-info__total">共 ${totalSnapshots} 个快照</span>
+          </div>
+          ${pageSizeSelector}
+        </div>
+      </div>
+    `;
+  }
+
+  // 生成页码按钮
+  let pageButtons = '';
+  const maxVisiblePages = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+  // 调整起始页
+  if (endPage - startPage + 1 < maxVisiblePages) {
+    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+  }
+
+  // 第一页
+  if (startPage > 1) {
+    pageButtons += `<button class="pagination-btn pagination-btn--page" data-page="1">1</button>`;
+    if (startPage > 2) {
+      pageButtons += `<span class="pagination-ellipsis">···</span>`;
+    }
+  }
+
+  // 中间页码
+  for (let i = startPage; i <= endPage; i++) {
+    const activeClass = i === currentPage ? 'pagination-btn--active' : '';
+    pageButtons += `<button class="pagination-btn pagination-btn--page ${activeClass}" data-page="${i}">${i}</button>`;
+  }
+
+  // 最后一页
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      pageButtons += `<span class="pagination-ellipsis">···</span>`;
+    }
+    pageButtons += `<button class="pagination-btn pagination-btn--page" data-page="${totalPages}">${totalPages}</button>`;
+  }
+
+  const prevDisabled = currentPage === 1 ? 'disabled' : '';
+  const nextDisabled = currentPage === totalPages ? 'disabled' : '';
+
+  return `
+    <div class="pagination-container">
+      <div class="pagination-row pagination-row--top">
+        <div class="pagination-info">
+          <span class="pagination-info__total">共 ${totalSnapshots} 个快照</span>
+          <span class="pagination-info__divider">|</span>
+          <span class="pagination-info__page">第 ${currentPage} / ${totalPages} 页</span>
+        </div>
+        ${pageSizeSelector}
+      </div>
+      <div class="pagination-row pagination-row--bottom">
+        <div class="pagination-controls">
+          <button class="pagination-btn pagination-btn--nav" data-page="first" ${prevDisabled} title="第一页">
+            <span class="pagination-icon">«</span>
+          </button>
+          <button class="pagination-btn pagination-btn--nav" data-page="prev" ${prevDisabled} title="上一页">
+            <span class="pagination-icon">‹</span>
+            <span class="pagination-text">上一页</span>
+          </button>
+          <div class="pagination-pages">
+            ${pageButtons}
+          </div>
+          <button class="pagination-btn pagination-btn--nav" data-page="next" ${nextDisabled} title="下一页">
+            <span class="pagination-text">下一页</span>
+            <span class="pagination-icon">›</span>
+          </button>
+          <button class="pagination-btn pagination-btn--nav" data-page="last" ${nextDisabled} title="最后一页">
+            <span class="pagination-icon">»</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================
+// 分页系统：渲染分页控件并绑定事件
+// ============================================
+function renderPagination() {
+  // 移除旧的分页控件
+  const existingPagination = document.querySelectorAll('.pagination-container');
+  existingPagination.forEach(el => el.remove());
+
+  const paginationHtml = generatePaginationHtml();
+  if (!paginationHtml) {
+    return;
+  }
+
+  const snapshotList = document.getElementById('snapshotList');
+  if (!snapshotList) {
+    return;
+  }
+
+  // 在快照列表后插入分页控件
+  snapshotList.insertAdjacentHTML('afterend', paginationHtml);
+
+  // 绑定分页事件
+  const paginationContainer = snapshotList.nextElementSibling;
+  if (paginationContainer && paginationContainer.classList.contains('pagination-container')) {
+    paginationContainer.addEventListener('click', handlePaginationClick);
+
+    // 绑定页面大小选择器事件
+    const pageSizeSelect = paginationContainer.querySelector('#pageSizeSelect');
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener('change', handlePageSizeChange);
+    }
+  }
+}
+
+// ============================================
+// 分页系统：处理页面大小变更
+// ============================================
+function handlePageSizeChange(event) {
+  const newSize = parseInt(event.target.value, 10);
+  if (PAGE_SIZE_OPTIONS.includes(newSize) && newSize !== paginationState.pageSize) {
+    // 保存新的页面大小
+    paginationState.pageSize = newSize;
+    savePageSize(newSize);
+
+    // 重新计算总页数
+    paginationState.totalPages = Math.ceil(paginationState.totalSnapshots / newSize);
+
+    // 确保当前页不超过新的总页数
+    if (paginationState.currentPage > paginationState.totalPages) {
+      paginationState.currentPage = paginationState.totalPages;
+    }
+    if (paginationState.currentPage < 1) {
+      paginationState.currentPage = 1;
+    }
+
+    // 重新渲染当前页
+    renderCurrentPage();
+  }
+}
+
+// ============================================
+// 分页系统：处理分页点击
+// ============================================
+function handlePaginationClick(event) {
+  const button = event.target.closest('.pagination-btn');
+  if (!button || button.disabled) {
+    return;
+  }
+
+  const pageValue = button.dataset.page;
+  let newPage = paginationState.currentPage;
+
+  if (pageValue === 'first') {
+    newPage = 1;
+  } else if (pageValue === 'prev') {
+    newPage = Math.max(1, paginationState.currentPage - 1);
+  } else if (pageValue === 'next') {
+    newPage = Math.min(paginationState.totalPages, paginationState.currentPage + 1);
+  } else if (pageValue === 'last') {
+    newPage = paginationState.totalPages;
+  } else {
+    newPage = parseInt(pageValue, 10);
+  }
+
+  if (newPage !== paginationState.currentPage && newPage >= 1 && newPage <= paginationState.totalPages) {
+    paginationState.currentPage = newPage;
+    renderCurrentPage();
+  }
+}
+
+// ============================================
+// 分页系统：渲染当前页
+// ============================================
+async function renderCurrentPage() {
+  const { currentPage, pageSize, allSnapshots, isPopup } = paginationState;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, allSnapshots.length);
+  const pageSnapshots = allSnapshots.slice(startIndex, endIndex);
+
+  const snapshotList = document.getElementById('snapshotList');
+  if (snapshotList) {
+    await renderSnapshotsInBatches(pageSnapshots, snapshotList, isPopup);
+    renderPagination();
+
+    // 滚动到快照列表顶部
+    snapshotList.scrollTop = 0;
+  }
+}
+
+// ============================================
 // 优化：使用 requestAnimationFrame 分批渲染快照
 // ============================================
 function renderSnapshotsInBatches(snapshots, snapshotList, isPopup) {
@@ -307,7 +576,7 @@ function renderSnapshotsInBatches(snapshots, snapshotList, isPopup) {
 }
 
 // ============================================
-// 优化后的 loadSnapshotList：接收快照数据，使用分批渲染
+// 优化后的 loadSnapshotList：使用分页系统
 // ============================================
 async function loadSnapshotList(isPopup = false, snapshots = null) {
   const snapshotList = document.getElementById('snapshotList');
@@ -320,14 +589,46 @@ async function loadSnapshotList(isPopup = false, snapshots = null) {
     // 如果未传入快照数据，则获取
     const snapshotData = snapshots || await TabVaultDB.getSnapshots();
 
+    // 移除旧的分页控件
+    const existingPagination = document.querySelectorAll('.pagination-container');
+    existingPagination.forEach(el => el.remove());
+
     if (!Array.isArray(snapshotData) || snapshotData.length === 0) {
       snapshotList.innerHTML = '<div class="empty-state">暂无快照</div>';
       setupEventDelegation(snapshotList);
+      // 重置分页状态
+      paginationState.allSnapshots = [];
+      paginationState.currentPage = 1;
+      paginationState.totalPages = 1;
+      paginationState.totalSnapshots = 0;
       return;
     }
 
-    // 使用分批渲染
-    await renderSnapshotsInBatches(snapshotData, snapshotList, isPopup);
+    // 更新分页状态
+    const { pageSize } = paginationState;
+    paginationState.allSnapshots = snapshotData;
+    paginationState.totalSnapshots = snapshotData.length;
+    paginationState.totalPages = Math.ceil(snapshotData.length / pageSize);
+    paginationState.isPopup = isPopup;
+
+    // 确保当前页不超过总页数
+    if (paginationState.currentPage > paginationState.totalPages) {
+      paginationState.currentPage = paginationState.totalPages;
+    }
+    if (paginationState.currentPage < 1) {
+      paginationState.currentPage = 1;
+    }
+
+    // 获取当前页的快照
+    const startIndex = (paginationState.currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, snapshotData.length);
+    const pageSnapshots = snapshotData.slice(startIndex, endIndex);
+
+    // 渲染当前页的快照
+    await renderSnapshotsInBatches(pageSnapshots, snapshotList, isPopup);
+
+    // 渲染分页控件
+    renderPagination();
 
   } catch (error) {
     console.error('加载快照列表失败:', error);

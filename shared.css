@@ -364,6 +364,284 @@ body:not(.options-page) .snapshot-list {
     gap: 16px;
 }
 
+/* ============================================
+   分页控件样式 - 增强版
+   ============================================ */
+.pagination-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 16px;
+    margin-top: 16px;
+    background: var(--glass-light);
+    border-radius: var(--radius-medium);
+    border: 1px solid var(--surface-border);
+    backdrop-filter: blur(20px);
+}
+
+.pagination-container--minimal {
+    padding: 16px;
+}
+
+.pagination-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.pagination-row--top {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--surface-border);
+}
+
+.pagination-row--bottom {
+    justify-content: center;
+}
+
+.pagination-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.pagination-info__total {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.pagination-info__divider {
+    opacity: 0.3;
+}
+
+.pagination-info__page {
+    color: var(--text-secondary);
+}
+
+/* 页面大小选择器 */
+.page-size-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-size-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.page-size-select {
+    padding: 6px 28px 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--glass-strong);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-small);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+}
+
+.page-size-select:hover {
+    border-color: var(--accent);
+    background-color: var(--glass-strong);
+}
+
+.page-size-select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+}
+
+/* 分页控制区 */
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.pagination-pages {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 8px;
+}
+
+/* 分页按钮基础样式 */
+.pagination-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-small);
+    background: var(--glass-strong);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(12px);
+    user-select: none;
+}
+
+.pagination-btn:hover:not(:disabled):not(.pagination-btn--active) {
+    background: linear-gradient(135deg, rgba(0, 122, 255, 0.1), rgba(88, 86, 214, 0.1));
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
+}
+
+.pagination-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: var(--glass-light);
+}
+
+/* 页码按钮 */
+.pagination-btn--page {
+    min-width: 38px;
+    font-weight: 600;
+}
+
+/* 激活状态 */
+.pagination-btn--active {
+    background: linear-gradient(135deg, var(--accent), #5856d6);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 2px 10px rgba(0, 122, 255, 0.3);
+}
+
+.pagination-btn--active:hover {
+    background: linear-gradient(135deg, var(--accent), #5856d6);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 122, 255, 0.35);
+}
+
+/* 导航按钮 */
+.pagination-btn--nav {
+    padding: 0 12px;
+    gap: 4px;
+    font-weight: 600;
+    background: var(--glass-light);
+}
+
+.pagination-btn--nav:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(0, 122, 255, 0.08), rgba(88, 86, 214, 0.08));
+}
+
+.pagination-icon {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.pagination-text {
+    font-size: 13px;
+}
+
+/* 省略号 */
+.pagination-ellipsis {
+    padding: 0 6px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    user-select: none;
+}
+
+/* ============================================
+   Popup 中的分页样式调整
+   ============================================ */
+body:not(.options-page) .pagination-container {
+    padding: 14px 12px;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+body:not(.options-page) .pagination-container--minimal {
+    padding: 10px 12px;
+}
+
+body:not(.options-page) .pagination-row {
+    gap: 10px;
+}
+
+body:not(.options-page) .pagination-row--top {
+    padding-bottom: 10px;
+}
+
+body:not(.options-page) .pagination-info {
+    font-size: 11px;
+    gap: 6px;
+}
+
+body:not(.options-page) .page-size-label {
+    font-size: 11px;
+}
+
+body:not(.options-page) .page-size-select {
+    padding: 4px 24px 4px 8px;
+    font-size: 11px;
+}
+
+body:not(.options-page) .pagination-controls {
+    gap: 3px;
+}
+
+body:not(.options-page) .pagination-pages {
+    gap: 3px;
+    margin: 0 4px;
+}
+
+body:not(.options-page) .pagination-btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    font-size: 12px;
+}
+
+body:not(.options-page) .pagination-btn--page {
+    min-width: 30px;
+}
+
+body:not(.options-page) .pagination-btn--nav {
+    padding: 0 8px;
+}
+
+body:not(.options-page) .pagination-icon {
+    font-size: 14px;
+}
+
+body:not(.options-page) .pagination-text {
+    display: none;
+}
+
+body:not(.options-page) .pagination-ellipsis {
+    padding: 0 4px;
+    font-size: 12px;
+}
+
 .snapshot-item {
     position: relative;
     padding: 20px 22px;
