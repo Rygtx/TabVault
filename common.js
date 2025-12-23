@@ -1,10 +1,4 @@
 // ============================================
-// 性能优化：常量和配置
-// ============================================
-const BATCH_SIZE = 10; // 每批渲染的快照数量
-const BATCH_DELAY = 0;  // 批次间的延迟（毫秒），使用0让浏览器有机会处理其他任务
-
-// ============================================
 // 分页系统：配置和状态
 // ============================================
 const DEFAULT_PAGE_SIZE = 50; // 默认每页显示的快照数量
@@ -491,7 +485,7 @@ function handlePaginationClick(event) {
 // ============================================
 // 分页系统：渲染当前页
 // ============================================
-async function renderCurrentPage() {
+function renderCurrentPage() {
   const { currentPage, pageSize, allSnapshots, isPopup } = paginationState;
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, allSnapshots.length);
@@ -499,7 +493,7 @@ async function renderCurrentPage() {
 
   const snapshotList = document.getElementById('snapshotList');
   if (snapshotList) {
-    await renderSnapshotsInBatches(pageSnapshots, snapshotList, isPopup);
+    renderSnapshots(pageSnapshots, snapshotList, isPopup);
     renderPagination();
 
     // 滚动到快照列表顶部
@@ -508,70 +502,43 @@ async function renderCurrentPage() {
 }
 
 // ============================================
-// 优化：使用 requestAnimationFrame 分批渲染快照
+// 渲染快照列表（同步渲染，保留 DocumentFragment 优化）
 // ============================================
-function renderSnapshotsInBatches(snapshots, snapshotList, isPopup) {
-  return new Promise((resolve) => {
-    // 清空列表
-    snapshotList.innerHTML = '';
+function renderSnapshots(snapshots, snapshotList, isPopup) {
+  // 清空列表
+  snapshotList.innerHTML = '';
 
-    // 设置事件委托（只需设置一次）
-    setupEventDelegation(snapshotList);
+  // 设置事件委托（只需设置一次）
+  setupEventDelegation(snapshotList);
 
-    if (snapshots.length === 0) {
-      snapshotList.innerHTML = '<div class="empty-state">暂无快照</div>';
-      resolve();
-      return;
+  if (snapshots.length === 0) {
+    snapshotList.innerHTML = '<div class="empty-state">暂无快照</div>';
+    return;
+  }
+
+  // 使用 DocumentFragment 减少重排（保留此优化）
+  const fragment = document.createDocumentFragment();
+
+  for (const snapshot of snapshots) {
+    const html = generateSnapshotHtml(snapshot, isPopup);
+
+    // 创建临时容器来解析 HTML
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+
+    // 将解析后的元素添加到 fragment
+    while (temp.firstChild) {
+      fragment.appendChild(temp.firstChild);
     }
+  }
 
-    let currentIndex = 0;
+  // 一次性添加所有元素到 DOM
+  snapshotList.appendChild(fragment);
 
-    function renderBatch() {
-      const batchEnd = Math.min(currentIndex + BATCH_SIZE, snapshots.length);
-
-      // 使用 DocumentFragment 减少重排
-      const batchFragment = document.createDocumentFragment();
-
-      for (let i = currentIndex; i < batchEnd; i++) {
-        const snapshot = snapshots[i];
-        const html = generateSnapshotHtml(snapshot, isPopup);
-
-        // 创建临时容器来解析 HTML
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-
-        // 将解析后的元素添加到 fragment
-        while (temp.firstChild) {
-          batchFragment.appendChild(temp.firstChild);
-        }
-      }
-
-      // 将这批元素添加到列表
-      snapshotList.appendChild(batchFragment);
-
-      currentIndex = batchEnd;
-
-      if (currentIndex < snapshots.length) {
-        // 还有更多快照，使用 requestAnimationFrame 调度下一批
-        if (BATCH_DELAY > 0) {
-          setTimeout(() => requestAnimationFrame(renderBatch), BATCH_DELAY);
-        } else {
-          requestAnimationFrame(renderBatch);
-        }
-      } else {
-        // 所有快照渲染完成，检查滚动溢出
-        requestAnimationFrame(() => {
-          snapshotList.querySelectorAll('.tab-list').forEach((list) => {
-            const hasOverflow = list.scrollHeight > list.clientHeight + 1;
-            list.classList.toggle('tab-list--scroll', hasOverflow);
-          });
-          resolve();
-        });
-      }
-    }
-
-    // 开始第一批渲染
-    requestAnimationFrame(renderBatch);
+  // 检查滚动溢出
+  snapshotList.querySelectorAll('.tab-list').forEach((list) => {
+    const hasOverflow = list.scrollHeight > list.clientHeight + 1;
+    list.classList.toggle('tab-list--scroll', hasOverflow);
   });
 }
 
@@ -624,8 +591,8 @@ async function loadSnapshotList(isPopup = false, snapshots = null) {
     const endIndex = Math.min(startIndex + pageSize, snapshotData.length);
     const pageSnapshots = snapshotData.slice(startIndex, endIndex);
 
-    // 渲染当前页的快照
-    await renderSnapshotsInBatches(pageSnapshots, snapshotList, isPopup);
+    // 渲染当前页的快照（同步渲染）
+    renderSnapshots(pageSnapshots, snapshotList, isPopup);
 
     // 渲染分页控件
     renderPagination();
