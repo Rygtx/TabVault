@@ -232,7 +232,10 @@
     return size;
   }
 
-  async function estimateUsage(forceRefresh = false) {
+  // ============================================
+  // 优化：estimateUsage 接受可选的快照数据，避免重复获取
+  // ============================================
+  async function estimateUsage(forceRefresh = false, providedSnapshots = null) {
     const now = Date.now();
 
     // 如果缓存有效且不强制刷新，直接返回缓存
@@ -240,8 +243,9 @@
       return usageCache;
     }
 
+    // 如果提供了快照数据，只获取其他数据；否则并行获取全部
     const [snapshots, settings, lastSavedState] = await Promise.all([
-      getSnapshots(),
+      providedSnapshots ? Promise.resolve(providedSnapshots) : getSnapshots(),
       getSettings(),
       getLastSavedState()
     ]);

@@ -156,7 +156,7 @@ function updateSnapshotCounts(snapshots = null) {
 }
 
 // ============================================
-// 辅助函数：生成单个快照的 HTML
+// 辅助函数：生成单个快照的 HTML（延迟渲染详情）
 // ============================================
 function generateSnapshotHtml(snapshot, isPopup) {
   const windows = Array.isArray(snapshot.windows) ? snapshot.windows : [];
@@ -173,54 +173,18 @@ function generateSnapshotHtml(snapshot, isPopup) {
   const typeLabel = isAuto ? '自动快照' : '手动快照';
   const typeClass = isAuto ? 'snapshot-chip--auto' : 'snapshot-chip--manual';
 
-  // 生成窗口详情
-  let windowDetails = '';
-  if (!isPopup && windows.length > 0) {
-    const windowParts = [];
-    for (let windowIndex = 0; windowIndex < windows.length; windowIndex++) {
-      const win = windows[windowIndex];
-      const tabs = Array.isArray(win.tabs) ? win.tabs : [];
-
-      // 生成标签页列表
-      const tabParts = [];
-      for (let tabIndex = 0; tabIndex < tabs.length; tabIndex++) {
-        const tab = tabs[tabIndex];
-        tabParts.push(`
-          <div class="tab-item">
-            <span class="tab-index">${tabIndex + 1}</span>
-            <div class="tab-body">
-              <div class="tab-title">${tab.title}</div>
-              <div class="tab-url">${tab.url}</div>
-            </div>
-          </div>
-        `);
-      }
-
-      const tabItems = tabParts.join('');
-      windowParts.push(`
-        <section class="window-item">
-          <header class="window-header">
-            <span class="window-name">窗口 ${windowIndex + 1}</span>
-            <span class="window-chip">标签页 ${tabs.length}</span>
-          </header>
-          <div class="tab-list">
-            ${tabItems || '<div class="tab-item tab-item--empty">暂无标签页信息</div>'}
-          </div>
-        </section>
-      `);
-    }
-    windowDetails = windowParts.join('');
-  }
-
-  const detailsBlock = windowDetails
-    ? `<details class="snapshot-details">
+  // 优化：延迟渲染详情内容，只在展开时加载
+  const detailsBlock = !isPopup && windows.length > 0
+    ? `<details class="snapshot-details" data-snapshot-id="${snapshot.id}">
         <summary>查看窗口和标签页（${totalWindows} 个窗口，${totalTabs} 个标签页）</summary>
-        <div class="snapshot-details__content">${windowDetails}</div>
+        <div class="snapshot-details__content" data-loaded="false">
+          <div class="details-loading">点击展开加载详情...</div>
+        </div>
       </details>`
     : '';
 
   return `
-    <article class="snapshot-item">
+    <article class="snapshot-item" data-snapshot-id="${snapshot.id}">
       <header class="snapshot-header">
         <div class="snapshot-title">
           <span class="snapshot-name">${snapshot.name}</span>
@@ -243,7 +207,74 @@ function generateSnapshotHtml(snapshot, isPopup) {
 }
 
 // ============================================
-// 优化：使用事件委托处理所有按钮点击
+// 辅助函数：生成窗口详情 HTML（用于延迟加载）
+// ============================================
+function generateWindowDetailsHtml(windows) {
+  const windowParts = [];
+  for (let windowIndex = 0; windowIndex < windows.length; windowIndex++) {
+    const win = windows[windowIndex];
+    const tabs = Array.isArray(win.tabs) ? win.tabs : [];
+
+    // 生成标签页列表
+    const tabParts = [];
+    for (let tabIndex = 0; tabIndex < tabs.length; tabIndex++) {
+      const tab = tabs[tabIndex];
+      tabParts.push(`
+        <div class="tab-item">
+          <span class="tab-index">${tabIndex + 1}</span>
+          <div class="tab-body">
+            <div class="tab-title">${tab.title || '无标题'}</div>
+            <div class="tab-url">${tab.url || ''}</div>
+          </div>
+        </div>
+      `);
+    }
+
+    const tabItems = tabParts.join('');
+    windowParts.push(`
+      <section class="window-item">
+        <header class="window-header">
+          <span class="window-name">窗口 ${windowIndex + 1}</span>
+          <span class="window-chip">标签页 ${tabs.length}</span>
+        </header>
+        <div class="tab-list">
+          ${tabItems || '<div class="tab-item tab-item--empty">暂无标签页信息</div>'}
+        </div>
+      </section>
+    `);
+  }
+  return windowParts.join('');
+}
+
+// ============================================
+// 延迟加载快照详情
+// ============================================
+function loadSnapshotDetails(snapshotId, detailsElement) {
+  const contentEl = detailsElement.querySelector('.snapshot-details__content');
+  if (!contentEl || contentEl.dataset.loaded === 'true') {
+    return; // 已加载
+  }
+
+  // 从缓存的快照数据中查找
+  const snapshot = paginationState.allSnapshots.find(s => s.id === snapshotId);
+  if (!snapshot) {
+    contentEl.innerHTML = '<div class="details-error">无法加载详情</div>';
+    return;
+  }
+
+  const windows = Array.isArray(snapshot.windows) ? snapshot.windows : [];
+  contentEl.innerHTML = generateWindowDetailsHtml(windows);
+  contentEl.dataset.loaded = 'true';
+
+  // 检查滚动溢出（仅对当前详情）
+  contentEl.querySelectorAll('.tab-list').forEach((list) => {
+    const hasOverflow = list.scrollHeight > list.clientHeight + 1;
+    list.classList.toggle('tab-list--scroll', hasOverflow);
+  });
+}
+
+// ============================================
+// 优化：使用事件委托处理所有按钮点击和详情展开
 // ============================================
 let snapshotListDelegateAttached = false;
 
@@ -254,6 +285,7 @@ function setupEventDelegation(snapshotList) {
   }
   snapshotListDelegateAttached = true;
 
+  // 处理按钮点击
   snapshotList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-action]');
     if (!button) {
@@ -275,6 +307,19 @@ function setupEventDelegation(snapshotList) {
         break;
     }
   });
+
+  // 处理详情展开（延迟加载窗口和标签页内容）
+  snapshotList.addEventListener('toggle', (event) => {
+    const details = event.target;
+    if (details.tagName !== 'DETAILS' || !details.open) {
+      return;
+    }
+
+    const snapshotId = Number(details.dataset.snapshotId);
+    if (snapshotId) {
+      loadSnapshotDetails(snapshotId, details);
+    }
+  }, true); // 使用捕获阶段
 }
 
 // ============================================
@@ -535,11 +580,7 @@ function renderSnapshots(snapshots, snapshotList, isPopup) {
   // 一次性添加所有元素到 DOM
   snapshotList.appendChild(fragment);
 
-  // 检查滚动溢出
-  snapshotList.querySelectorAll('.tab-list').forEach((list) => {
-    const hasOverflow = list.scrollHeight > list.clientHeight + 1;
-    list.classList.toggle('tab-list--scroll', hasOverflow);
-  });
+  // 注意：滚动溢出检测已移至 loadSnapshotDetails 中按需执行
 }
 
 // ============================================
@@ -613,20 +654,20 @@ async function updateAllInfo(isPopup = false) {
   }
 
   try {
-    // 优化：并行获取所有需要的数据，但只获取一次
-    const [snapshots, usageData] = await Promise.all([
-      TabVaultDB.getSnapshots(),
-      TabVaultDB.estimateUsage()
-    ]);
+    // 优化：先获取快照数据，然后传递给 estimateUsage 避免重复获取
+    const snapshots = await TabVaultDB.getSnapshots();
+
+    // 使用已获取的快照数据计算存储用量
+    const usageData = await TabVaultDB.estimateUsage(false, snapshots);
 
     // 同步更新快照计数（不需要再次获取数据）
     updateSnapshotCounts(snapshots);
 
     // 同步更新存储用量（使用已获取的数据）
-    await updateStorageUsage(usageData);
+    updateStorageUsage(usageData);
 
     // 渲染快照列表（使用已获取的数据）
-    await loadSnapshotList(isPopup, snapshots);
+    loadSnapshotList(isPopup, snapshots);
 
   } catch (error) {
     console.error('更新信息失败:', error);

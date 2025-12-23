@@ -800,6 +800,29 @@ body:not(.options-page) .snapshot-item {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+/* 延迟加载提示样式 */
+.details-loading {
+    grid-column: 1 / -1;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    background: var(--glass-light);
+    border-radius: var(--radius-medium);
+    border: 1px dashed var(--surface-border);
+}
+
+.details-error {
+    grid-column: 1 / -1;
+    padding: 20px;
+    text-align: center;
+    color: #ff453a;
+    font-size: 13px;
+    background: rgba(255, 69, 58, 0.1);
+    border-radius: var(--radius-medium);
+    border: 1px solid rgba(255, 69, 58, 0.3);
+}
+
 .window-item {
     padding: 16px;
     border-radius: var(--radius-medium);
